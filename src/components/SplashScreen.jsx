@@ -13,7 +13,7 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
 
   const statusMessagesMap = {
     neon: [
-      'INITIALIZING JGF ENGINE...',
+      'INITIALIZING JGFMusic ENGINE...',
       'POWERING UP NEON EQUALIZERS...',
       'SYNCING BASS RESONANCE...',
       'READY TO DROP THE BEAT!'
