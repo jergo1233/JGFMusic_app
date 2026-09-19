@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { MoreVertical, Play, Pause, Edit2, Trash2, Share, PlusCircle, Clock, Image as ImageIcon } from 'lucide-react';
 import { formatTime } from '../utils/format';
 import { usePlayer } from '../context/PlayerContext';
@@ -21,13 +21,51 @@ const SongItem = ({
   onToggleMenu
 }) => {
   const [internalMenuOpen, setInternalMenuOpen] = useState(false);
+  const [menuPlacement, setMenuPlacement] = useState('bottom');
+  const menuBtnRef = useRef(null);
   const { currentTime, duration: activeDuration } = usePlayer();
 
   const isMenuVisible = onToggleMenu ? isMenuOpen : internalMenuOpen;
 
+  const calculatePlacement = useCallback(() => {
+    if (menuBtnRef.current) {
+      const rect = menuBtnRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceBelow = windowHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // BottomNav (~70px) + MiniPlayer (~70px) occupy bottom area (~140px).
+      // Dropdown menu is ~280px tall. If space below is less than 310px and space above has room, flip upward!
+      if (spaceBelow < 310 && spaceAbove > 220) {
+        setMenuPlacement('top');
+      } else {
+        setMenuPlacement('bottom');
+      }
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (isMenuVisible) {
+      calculatePlacement();
+    }
+  }, [isMenuVisible, calculatePlacement]);
+
+  useEffect(() => {
+    if (!isMenuVisible) return;
+    const handleScrollOrResize = () => {
+      calculatePlacement();
+    };
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isMenuVisible, calculatePlacement]);
+
   const handleMenuClick = (e) => {
     e.stopPropagation();
     e.preventDefault();
+    calculatePlacement();
     if (onToggleMenu) {
       onToggleMenu(song.id);
     } else {
@@ -69,6 +107,8 @@ const SongItem = ({
     <div 
       onClick={handleCardClick}
       className={`relative flex items-center p-3.5 sm:p-4 cursor-pointer max-border rounded-2xl max-shadow hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all ${
+        isMenuVisible ? 'z-40' : 'z-0'
+      } ${
         isCurrent && isPlaying 
           ? 'playing-box-beat bg-indigo-600 text-white dark:bg-indigo-50 dark:text-indigo-950' 
           : isCurrent 
@@ -131,7 +171,7 @@ const SongItem = ({
           }`}>
             {song.artist}
           </p>
-          <span className="text-slate-500 dark:text-slate-400 font-black text-xs">•</span>
+          <span className="text-slate-500 dark:text-slate-400 font-black text-xs">â€¢</span>
           {isCurrent ? (
             <span className="font-mono text-xs font-black px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 shadow-sm flex items-center gap-1 flex-shrink-0">
               <Clock size={11} className="stroke-[2.5]" />
@@ -182,6 +222,7 @@ const SongItem = ({
       {/* More Options Dropdown (Single click toggle, no multiple open menus) */}
       <button 
         type="button"
+        ref={menuBtnRef}
         id={`song-menu-btn-${song.id}`}
         onClick={handleMenuClick} 
         className={`p-2 ml-1 cursor-pointer transition-all rounded-lg active:scale-95 ${
@@ -196,54 +237,58 @@ const SongItem = ({
         <MoreVertical size={24} className="stroke-[3]" />
       </button>
 
-      {/* Single Dropdown Menu */}
+      {/* Single Dropdown Menu with Smart Upward / Downward Placement */}
       {isMenuVisible && (
         <div 
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-3 top-14 w-56 bg-indigo-50 dark:bg-slate-900 max-border rounded-2xl max-shadow z-30 flex flex-col p-1.5 overflow-hidden shadow-2xl animate-fade-in"
+          className={`absolute right-3 ${
+            menuPlacement === 'top' 
+              ? 'bottom-14 origin-bottom-right' 
+              : 'top-14 origin-top-right'
+          } w-56 max-w-[calc(100vw-2rem)] bg-indigo-50 dark:bg-slate-900 max-border rounded-2xl max-shadow z-50 flex flex-col p-1.5 overflow-y-auto max-h-[min(380px,calc(100vh-160px))] shadow-2xl animate-fade-in`}
         >
           <button 
             type="button"
             onClick={(e) => executeAction(onCustomCover, e)} 
-            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors"
+            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors flex-shrink-0"
           >
-            <ImageIcon size={18} className="mr-3 stroke-[2.5] text-amber-500" /> CUSTOM COVER
+            <ImageIcon size={18} className="mr-3 stroke-[2.5] text-amber-500 flex-shrink-0" /> CUSTOM COVER
           </button>
           <button 
             type="button"
             onClick={(e) => executeAction(onSchedule, e)} 
-            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors"
+            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors flex-shrink-0"
           >
-            <Clock size={18} className="mr-3 stroke-[2.5] text-indigo-500" /> SCHEDULE
+            <Clock size={18} className="mr-3 stroke-[2.5] text-indigo-500 flex-shrink-0" /> SCHEDULE
           </button>
           <button 
             type="button"
             onClick={(e) => executeAction(onAddToPlaylist, e)} 
-            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors"
+            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors flex-shrink-0"
           >
-            <PlusCircle size={18} className="mr-3 stroke-[2.5] text-emerald-500" /> ADD TO LIST
+            <PlusCircle size={18} className="mr-3 stroke-[2.5] text-emerald-500 flex-shrink-0" /> ADD TO LIST
           </button>
           <button 
             type="button"
             onClick={(e) => executeAction(onRename, e)} 
-            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors"
+            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors flex-shrink-0"
           >
-            <Edit2 size={18} className="mr-3 stroke-[2.5] text-blue-500" /> RENAME
+            <Edit2 size={18} className="mr-3 stroke-[2.5] text-blue-500 flex-shrink-0" /> RENAME
           </button>
           <button 
             type="button"
             onClick={(e) => executeAction(onExport, e)} 
-            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors"
+            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase text-indigo-950 dark:text-indigo-50 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-50 dark:hover:text-indigo-950 rounded-xl cursor-pointer transition-colors flex-shrink-0"
           >
-            <Share size={18} className="mr-3 stroke-[2.5] text-purple-500" /> EXPORT
+            <Share size={18} className="mr-3 stroke-[2.5] text-purple-500 flex-shrink-0" /> EXPORT
           </button>
-          <div className="h-0.5 bg-indigo-200 dark:bg-slate-800 my-1 rounded" />
+          <div className="h-0.5 bg-indigo-200 dark:bg-slate-800 my-1 rounded flex-shrink-0" />
           <button 
             type="button"
             onClick={(e) => executeAction(onDelete, e)} 
-            className="w-full flex items-center px-4 py-2.5 text-sm font-black uppercase bg-red-500 text-white hover:bg-red-600 rounded-xl cursor-pointer transition-colors shadow-sm"
+            className="w-full flex items-center px-4 py-3 text-sm font-black uppercase bg-red-500 text-white hover:bg-red-600 active:bg-red-700 rounded-xl cursor-pointer transition-colors shadow-sm flex-shrink-0"
           >
-            <Trash2 size={18} className="mr-3 stroke-[2.5]" /> DELETE
+            <Trash2 size={18} className="mr-3 stroke-[2.5] flex-shrink-0" /> DELETE
           </button>
         </div>
       )}
