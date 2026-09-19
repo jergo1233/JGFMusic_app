@@ -251,10 +251,10 @@ const SettingsPage = () => {
         <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/70 max-border mb-4 flex items-center gap-4">
           <div className="bg-indigo-600 text-white dark:bg-indigo-50 dark:text-indigo-950 max-border rounded-full w-14 h-14 flex items-center justify-center overflow-hidden p-0.5 flex-shrink-0 shadow-md">
             <img 
-              src={logoUrl || '/icon.svg'} 
+              src={logoUrl || '/icon.png'} 
               alt="Head Logo Preview" 
               className="w-full h-full object-cover rounded-full"
-              onError={(e) => { e.currentTarget.src = '/icon.svg'; }}
+              onError={(e) => { e.currentTarget.src = '/icon.png'; }}
             />
           </div>
           <div>
