@@ -79,7 +79,7 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
       return (
         <div className={`w-full h-full flex flex-col items-center justify-center text-white`}>
           <Disc3 size={40} className="animate-spin text-purple-400 mb-0.5" style={{ animationDuration: '6s' }} />
-          <span className="text-[10px] font-black tracking-widest uppercase">JGF</span>
+          <span className="text-[10px] font-black tracking-widest uppercase">JGFM</span>
         </div>
       );
     }
