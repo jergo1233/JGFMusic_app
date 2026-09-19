@@ -1,0 +1,6 @@
+{
+  "name": "JGFMusic",
+  "description": "Offline & Standalone Music Player with Volume Control, Queue Navigation, Auto-Play, Listening History, and Custom Music Covers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#312e81"/>
+      <stop offset="50%" stop-color="#4338ca"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="neonAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)"/>
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#6366f1" stroke-width="8" stroke-dasharray="16 12" opacity="0.6"/>
+  <!-- Vinyl Circle Elements -->
+  <circle cx="256" cy="256" r="170" fill="#0b0f19" stroke="#374151" stroke-width="4"/>
+  <circle cx="256" cy="256" r="135" fill="none" stroke="#1f2937" stroke-width="2"/>
+  <circle cx="256" cy="256" r="105" fill="none" stroke="#1f2937" stroke-width="2"/>
+  <!-- Center Music Note -->
+  <circle cx="256" cy="256" r="72" fill="url(#neonAccent)"/>
+  <path d="M242 205v80a22 22 0 1 1-18-21.5V220l58-13v64a22 22 0 1 1-18-21.5V190l-22 15z" fill="#ffffff"/>
+  <!-- Equalizer Bars on Bottom -->
+  <rect x="180" y="385" width="16" height="40" rx="8" fill="#ec4899"/>
+  <rect x="206" y="365" width="16" height="60" rx="8" fill="#8b5cf6"/>
+  <rect x="232" y="350" width="16" height="75" rx="8" fill="#6366f1"/>
+  <rect x="258" y="370" width="16" height="55" rx="8" fill="#3b82f6"/>
+  <rect x="284" y="355" width="16" height="70" rx="8" fill="#10b981"/>
+  <rect x="310" y="380" width="16" height="45" rx="8" fill="#f59e0b"/>
+</svg>
