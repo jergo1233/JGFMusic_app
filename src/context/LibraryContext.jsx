@@ -13,7 +13,7 @@ const STARTER_SONGS = [
   {
     id: 'starter_1',
     title: 'Neon Beat Symphony',
-    artist: 'Jerome Urbano (JGF)',
+    artist: 'Jerome Urbano (JGFMusic)',
     album: 'Cyber Soundscapes',
     duration: 184,
     // Free high-quality sample audio stream
