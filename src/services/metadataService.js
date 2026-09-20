@@ -31,3 +31,5 @@ export const parseMetadata = async (fileObj) => {
     artwork: null
   };
 };
+
+/* JGFMusic v1.0.2 */

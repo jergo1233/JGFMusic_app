@@ -44,3 +44,5 @@ createRoot(document.getElementById('root')).render(
     <App />
   </StrictMode>
 );
+
+/* JGFMusic v1.0.2 */

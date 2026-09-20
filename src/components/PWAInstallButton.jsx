@@ -106,3 +106,5 @@ export const PWAInstallButton = ({ className = '' }) => {
 
   return null;
 };
+
+/* JGFMusic v1.0.2 */

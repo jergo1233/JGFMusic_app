@@ -104,3 +104,5 @@ const AddMusicButton = () => {
 };
 
 export default AddMusicButton;
+
+/* JGFMusic v1.0.2 */

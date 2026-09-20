@@ -29,3 +29,5 @@ const ConfirmDialog = ({ isOpen, title, message, onConfirm, onCancel }) => {
 };
 
 export default ConfirmDialog;
+
+/* JGFMusic v1.0.2 */

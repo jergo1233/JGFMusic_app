@@ -278,3 +278,5 @@ export const LibraryProvider = ({ children }) => {
     </LibraryContext.Provider>
   );
 };
+
+/* JGFMusic v1.0.2 */

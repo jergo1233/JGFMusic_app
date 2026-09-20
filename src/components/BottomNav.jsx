@@ -43,3 +43,5 @@ const BottomNav = () => {
 };
 
 export default BottomNav;
+
+/* JGFMusic v1.0.2 */

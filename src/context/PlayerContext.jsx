@@ -336,3 +336,5 @@ export const PlayerProvider = ({ children }) => {
     </PlayerContext.Provider>
   );
 };
+
+/* JGFMusic v1.0.2 */

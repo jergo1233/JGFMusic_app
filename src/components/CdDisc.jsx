@@ -70,3 +70,5 @@ const CdDisc = ({ isPlaying = false, title = '', artist = '', className = '', co
 };
 
 export default CdDisc;
+
+/* JGFMusic v1.0.2 */

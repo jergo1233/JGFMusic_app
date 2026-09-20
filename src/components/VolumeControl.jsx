@@ -58,3 +58,5 @@ const VolumeControl = ({ className = '' }) => {
 };
 
 export default VolumeControl;
+
+/* JGFMusic v1.0.2 */

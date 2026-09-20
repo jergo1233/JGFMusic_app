@@ -477,3 +477,5 @@ const SettingsPage = () => {
 };
 
 export default SettingsPage;
+
+/* JGFMusic v1.0.2 */

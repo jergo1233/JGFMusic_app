@@ -308,3 +308,5 @@ const SongItem = ({
 };
 
 export default SongItem;
+
+/* JGFMusic v1.0.2 */

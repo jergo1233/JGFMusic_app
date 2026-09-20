@@ -211,3 +211,5 @@ const NowPlayingPage = () => {
 };
 
 export default NowPlayingPage;
+
+/* JGFMusic v1.0.2 */

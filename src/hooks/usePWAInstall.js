@@ -74,3 +74,4 @@ export function usePWAInstall() {
   };
 }
 
+/* JGFMusic v1.0.2 */

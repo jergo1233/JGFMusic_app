@@ -20,3 +20,5 @@ const Background = () => {
 };
 
 export default Background;
+
+/* JGFMusic v1.0.2 */

@@ -160,3 +160,5 @@ export const DjCdHand = ({ isPlaying = false, onClick, className = "" }) => {
 };
 
 export default DjCdHand;
+
+/* JGFMusic v1.0.2 */

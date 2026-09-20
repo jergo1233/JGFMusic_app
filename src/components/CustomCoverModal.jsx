@@ -183,3 +183,5 @@ const CustomCoverModal = ({ isOpen, song, onClose, onSaveCover }) => {
 };
 
 export default CustomCoverModal;
+
+/* JGFMusic v1.0.2 */

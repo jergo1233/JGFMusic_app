@@ -237,3 +237,5 @@ const PlaylistDetail = () => {
 };
 
 export default PlaylistDetail;
+
+/* JGFMusic v1.0.2 */

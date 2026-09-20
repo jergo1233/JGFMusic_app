@@ -169,3 +169,5 @@ const MiniPlayer = () => {
 };
 
 export default MiniPlayer;
+
+/* JGFMusic v1.0.2 */

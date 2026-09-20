@@ -69,3 +69,5 @@ export const fileService = {
     return true;
   }
 };
+
+/* JGFMusic v1.0.2 */

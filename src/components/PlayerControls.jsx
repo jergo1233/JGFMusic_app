@@ -122,3 +122,5 @@ const PlayerControls = ({
 };
 
 export default PlayerControls;
+
+/* JGFMusic v1.0.2 */

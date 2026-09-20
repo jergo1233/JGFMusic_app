@@ -13,3 +13,5 @@ const BeatAnimation = ({ isPlaying }) => {
 };
 
 export default BeatAnimation;
+
+/* JGFMusic v1.0.2 */

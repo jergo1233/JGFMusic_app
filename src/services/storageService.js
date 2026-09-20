@@ -27,3 +27,5 @@ export const storageService = {
     }
   }
 };
+
+/* JGFMusic v1.0.2 */

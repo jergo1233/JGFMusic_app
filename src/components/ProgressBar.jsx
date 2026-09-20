@@ -92,3 +92,5 @@ const ProgressBar = ({ currentTime, duration, onSeek }) => {
 };
 
 export default ProgressBar;
+
+/* JGFMusic v1.0.2 */

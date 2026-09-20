@@ -168,7 +168,7 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
                   className="text-center"
                 >
                   <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-400 via-pink-400 to-cyan-300 drop-shadow-[0_0_20px_rgba(217,70,239,0.8)]">
-                    JGFM Screen
+                    JGFMusic
                   </h1>
                   <p className="mt-1.5 text-xs sm:text-sm font-black uppercase tracking-widest text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
                     NEON BEAT SYSTEM • FEEL THE BASS
@@ -277,7 +277,7 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
                   className="text-center"
                 >
                   <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-wide text-amber-100 drop-shadow-[0_4px_12px_rgba(245,158,11,0.5)]">
-                    JGFM Screen
+                    JGFMusic
                   </h1>
                   <p className="mt-1.5 text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-400">
                     CLASSIC HI-FI • WARM ANALOG TUBES
@@ -400,7 +400,7 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
                   className="text-center"
                 >
                   <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-[0.25em] text-slate-100 drop-shadow-sm">
-                    JGFM SCREEN
+                    JGFMUSIC
                   </h1>
                   <p className="mt-1.5 text-xs font-mono font-bold uppercase tracking-widest text-cyan-400">
                     STUDIO REFERENCE • BIT-PERFECT SOUND
@@ -443,3 +443,5 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
 };
 
 export default SplashScreen;
+
+/* JGFMusic v1.0.2 */

@@ -125,3 +125,5 @@ class PlaybackService {
 }
 
 export const playbackService = new PlaybackService();
+
+/* JGFMusic v1.0.2 */
