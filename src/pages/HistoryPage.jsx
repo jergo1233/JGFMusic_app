@@ -50,7 +50,7 @@ const HistoryPage = () => {
   };
 
   return (
-    <div className="pb-44 px-4 max-w-2xl mx-auto min-h-screen select-none">
+    <div className="pb-56 sm:pb-64 px-4 max-w-2xl mx-auto min-h-screen select-none">
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">

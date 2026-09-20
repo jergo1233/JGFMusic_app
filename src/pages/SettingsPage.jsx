@@ -113,7 +113,7 @@ const SettingsPage = () => {
   ];
 
   return (
-    <div className="pb-44 px-4 max-w-2xl mx-auto min-h-screen select-none">
+    <div className="pb-56 sm:pb-64 px-4 max-w-2xl mx-auto min-h-screen select-none">
       {/* Install App Section */}
       <div className="bg-indigo-50 dark:bg-slate-800 max-border rounded-3xl max-shadow p-5 sm:p-6 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -251,10 +251,10 @@ const SettingsPage = () => {
         <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/70 max-border mb-4 flex items-center gap-4">
           <div className="bg-indigo-600 text-white dark:bg-indigo-50 dark:text-indigo-950 max-border rounded-full w-14 h-14 flex items-center justify-center overflow-hidden p-0.5 flex-shrink-0 shadow-md">
             <img 
-              src={logoUrl || '/icon.png'} 
+              src={logoUrl || '/icon.svg'} 
               alt="Head Logo Preview" 
               className="w-full h-full object-cover rounded-full"
-              onError={(e) => { e.currentTarget.src = '/icon.png'; }}
+              onError={(e) => { e.currentTarget.src = '/icon.svg'; }}
             />
           </div>
           <div>

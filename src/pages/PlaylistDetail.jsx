@@ -59,7 +59,7 @@ const PlaylistDetail = () => {
   };
 
   return (
-    <div className="pb-44 px-4 max-w-2xl mx-auto min-h-screen select-none">
+    <div className="pb-56 sm:pb-64 px-4 max-w-2xl mx-auto min-h-screen select-none">
       <div className="flex items-center justify-between mb-6">
         <button 
           onClick={() => navigate('/playlists')} 

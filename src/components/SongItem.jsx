@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { MoreVertical, Play, Pause, Edit2, Trash2, Share, PlusCircle, Clock, Image as ImageIcon } from 'lucide-react';
-import { formatTime } from '../utils/format';
+import { formatTime, formatBytes } from '../utils/format';
 import { usePlayer } from '../context/PlayerContext';
 import BeatAnimation from './BeatAnimation';
 import CdDisc from './CdDisc';
@@ -171,7 +171,7 @@ const SongItem = ({
           }`}>
             {song.artist}
           </p>
-          <span className="text-slate-500 dark:text-slate-400 font-black text-xs">â€¢</span>
+          <span className="text-slate-500 dark:text-slate-400 font-black text-xs">•</span>
           {isCurrent ? (
             <span className="font-mono text-xs font-black px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 shadow-sm flex items-center gap-1 flex-shrink-0">
               <Clock size={11} className="stroke-[2.5]" />
@@ -182,6 +182,17 @@ const SongItem = ({
               {formatTime(song.duration)}
             </span>
           )}
+
+          {song.fileSize ? (
+            <>
+              <span className="text-slate-500 dark:text-slate-400 font-black text-xs">•</span>
+              <span className={`text-[11px] font-mono font-black uppercase flex-shrink-0 ${
+                isCurrent ? 'text-indigo-100 dark:text-indigo-900' : 'text-indigo-700 dark:text-indigo-300'
+              }`}>
+                {formatBytes(song.fileSize)}
+              </span>
+            </>
+          ) : null}
         </div>
       </div>
 

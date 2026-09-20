@@ -65,7 +65,63 @@ export const PlayerProvider = ({ children }) => {
     }
   }, [songs, currentSong]);
 
-  // Automatic schedule watcher for in-app trigger
+  const playScheduledItem = (sched) => {
+    if (!sched?.targetId) return;
+    if (sched.type === 'song') {
+      const targetSong = songs.find(s => s.id === sched.targetId);
+      if (targetSong) {
+        playSong(targetSong, songs);
+      }
+    } else if (sched.type === 'playlist') {
+      const pl = playlists.find(p => p.id === sched.targetId);
+      if (pl && pl.songIds && pl.songIds.length > 0) {
+        const plSongs = pl.songIds.map(id => songs.find(s => s.id === id)).filter(Boolean);
+        if (plSongs.length > 0) {
+          setCurrentPlaylist(plSongs);
+          playSong(plSongs[0], plSongs);
+        }
+      }
+    }
+  };
+
+  // Sync schedules with Service Worker & maintain WakeLock when schedules are active
+  useEffect(() => {
+    if (schedules && schedules.length > 0) {
+      schedulerService.syncWithServiceWorker(schedules);
+      const hasActiveToday = schedules.some(s => s.enabled);
+      if (hasActiveToday) {
+        schedulerService.requestWakeLock();
+      }
+    }
+  }, [schedules]);
+
+  // Listen for Service Worker background alarm auto-play messages
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      const handleSwMessage = (e) => {
+        if (e.data && e.data.type === 'AUTO_PLAY_SCHEDULED') {
+          console.log("Service Worker triggered auto-play:", e.data);
+          playScheduledItem({ targetId: e.data.targetId, type: e.data.targetType });
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+      return () => navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+    }
+  }, [songs, playlists]);
+
+  // Check URL search parameter for scheduled play trigger on app open from notification
+  useEffect(() => {
+    if (songs.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const playScheduleId = params.get('playSchedule');
+    const scheduleType = params.get('type') || 'song';
+    if (playScheduleId) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      playScheduledItem({ targetId: playScheduleId, type: scheduleType });
+    }
+  }, [songs, playlists]);
+
+  // High-precision Schedule Watcher with Web Worker for unthrottled background/standby execution
   useEffect(() => {
     const checkSchedules = () => {
       if (!schedules || schedules.length === 0) return;
@@ -90,28 +146,39 @@ export const PlayerProvider = ({ children }) => {
         }
       });
     };
-    const interval = setInterval(checkSchedules, 4000);
-    return () => clearInterval(interval);
-  }, [schedules, songs, playlists]);
 
-  const playScheduledItem = (sched) => {
-    if (!sched?.targetId) return;
-    if (sched.type === 'song') {
-      const targetSong = songs.find(s => s.id === sched.targetId);
-      if (targetSong) {
-        playSong(targetSong, songs);
-      }
-    } else if (sched.type === 'playlist') {
-      const pl = playlists.find(p => p.id === sched.targetId);
-      if (pl && pl.songIds && pl.songIds.length > 0) {
-        const plSongs = pl.songIds.map(id => songs.find(s => s.id === id)).filter(Boolean);
-        if (plSongs.length > 0) {
-          setCurrentPlaylist(plSongs);
-          playSong(plSongs[0], plSongs);
-        }
-      }
+    let worker = null;
+    try {
+      const workerCode = `
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (timer) clearInterval(timer);
+            timer = setInterval(() => postMessage('tick'), 3000);
+          } else if (e.data === 'stop') {
+            if (timer) clearInterval(timer);
+          }
+        };
+      `;
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      worker = new Worker(URL.createObjectURL(blob));
+      worker.onmessage = () => {
+        checkSchedules();
+      };
+      worker.postMessage('start');
+    } catch (e) {
+      console.warn('Worker ticker not available, fallback to standard timer', e);
     }
-  };
+
+    const interval = setInterval(checkSchedules, 3000);
+    return () => {
+      clearInterval(interval);
+      if (worker) {
+        worker.postMessage('stop');
+        worker.terminate();
+      }
+    };
+  }, [schedules, songs, playlists]);
 
   // Previous & Next Song (in Playlist & Library) + Auto-play Next Song when finished
   const handleNext = () => {

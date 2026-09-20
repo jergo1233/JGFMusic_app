@@ -125,10 +125,104 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Listen for message events (e.g. manual skipWaiting)
+// Background Schedule Timers map
+let activeScheduleTimers = new Map();
+
+// Listen for message events (e.g. manual skipWaiting or SYNC_SCHEDULES)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+
+  if (event.data && event.data.type === 'SYNC_SCHEDULES') {
+    const schedules = event.data.schedules || [];
+    
+    // Clear previous timers
+    for (const timer of activeScheduleTimers.values()) {
+      clearTimeout(timer);
+    }
+    activeScheduleTimers.clear();
+
+    const now = Date.now();
+    schedules.forEach(sched => {
+      if (!sched.enabled) return;
+      const targetTime = new Date(`${sched.date}T${sched.time}:00`).getTime();
+      const delay = targetTime - now;
+
+      // If scheduled within next 24 hours
+      if (delay > 0 && delay < 24 * 60 * 60 * 1000) {
+        const timerId = setTimeout(async () => {
+          try {
+            // First attempt to notify existing clients to auto-play if app is open/minimized
+            const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+            let clientNotified = false;
+            for (const client of clientsList) {
+              client.postMessage({
+                type: 'AUTO_PLAY_SCHEDULED',
+                targetId: sched.targetId,
+                targetType: sched.type,
+                title: sched.title
+              });
+              clientNotified = true;
+            }
+
+            // Always show high-priority system alarm notification with audio chime & action buttons
+            // This ensures it rings and wakes the phone even when closed or standing
+            await self.registration.showNotification(`⏰ ALARM: ${sched.title}`, {
+              body: `Oras na ng kanta! ${clientNotified ? 'Kasalukuyang nagpe-play na!' : 'I-tap para mag-play agad.'}`,
+              icon: '/icon.svg',
+              badge: '/icon.svg',
+              tag: `sched_alarm_${sched.id}`,
+              renotify: true,
+              requireInteraction: true,
+              vibrate: [300, 100, 300, 100, 400],
+              actions: [
+                { action: 'play', title: '▶ PLAY AGAD' },
+                { action: 'dismiss', title: '✖ DISMISS' }
+              ],
+              data: {
+                targetId: sched.targetId,
+                type: sched.type,
+                title: sched.title,
+                url: `/?playSchedule=${sched.targetId}&type=${sched.type}`
+              }
+            });
+          } catch (err) {
+            console.error('Failed to trigger SW alarm notification:', err);
+          }
+        }, delay);
+
+        activeScheduleTimers.set(sched.id, timerId);
+      }
+    });
+  }
+});
+
+// Notification click event: focus or open app and auto-play song
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  if (event.action === 'dismiss') return;
+
+  const data = event.notification.data || {};
+  const targetUrl = data.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.postMessage({
+            type: 'AUTO_PLAY_SCHEDULED',
+            targetId: data.targetId,
+            targetType: data.type,
+            title: data.title
+          });
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
 });
 

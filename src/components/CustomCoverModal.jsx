@@ -62,7 +62,7 @@ const CustomCoverModal = ({ isOpen, song, onClose, onSaveCover }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in select-none">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in select-none">
       <div className="bg-indigo-50 dark:bg-slate-900 text-indigo-950 dark:text-indigo-50 max-border rounded-3xl max-shadow max-w-md w-full p-6 space-y-5 relative">
         {/* Header */}
         <div className="flex items-center justify-between border-b-2 border-indigo-200 dark:border-slate-800 pb-3">

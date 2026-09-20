@@ -121,13 +121,13 @@ const SchedulePage = () => {
         createdAt: Date.now()
       };
 
-      await schedulerService.schedulePlayback(newSched);
       const updated = [newSched, ...schedules];
+      await schedulerService.schedulePlayback(newSched, updated);
       await saveSchedules(updated);
 
       setShowForm(false);
-      setSuccessMessage(`Saved! Scheduled "${title}" for ${finalDate} at ${finalTime}`);
-      setTimeout(() => setSuccessMessage(''), 5000);
+      setSuccessMessage(`Saved! Naka-schedule ang "${title}" sa ${finalDate} nang ${finalTime}. Tuloy ang play kahit naka-standby o naka-off ang screen!`);
+      setTimeout(() => setSuccessMessage(''), 6000);
     } catch (e) {
       console.error('Failed to schedule:', e);
       setErrorMessage('Failed to save schedule.');
@@ -145,11 +145,13 @@ const SchedulePage = () => {
       return s;
     });
     await saveSchedules(updated);
+    await schedulerService.syncWithServiceWorker(updated);
   };
 
   const deleteSchedule = async (id) => {
     const updated = schedules.filter(s => s.id !== id);
     await saveSchedules(updated);
+    await schedulerService.cancelSchedule(id, updated);
   };
 
   const handleTestPlay = (sched) => {
@@ -161,7 +163,7 @@ const SchedulePage = () => {
   };
 
   return (
-    <div className="pb-44 px-4 max-w-2xl mx-auto min-h-screen select-none">
+    <div className="pb-56 sm:pb-64 px-4 max-w-2xl mx-auto min-h-screen select-none">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">

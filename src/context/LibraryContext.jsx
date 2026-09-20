@@ -8,41 +8,6 @@ const LibraryContext = createContext();
 
 export const useLibrary = () => useContext(LibraryContext);
 
-// Pre-seeded starter songs so user can test sound, next/prev, progress & cover right away
-const STARTER_SONGS = [
-  {
-    id: 'starter_1',
-    title: 'Neon Beat Symphony',
-    artist: 'Jerome Urbano (JGFMusic)',
-    album: 'Cyber Soundscapes',
-    duration: 184,
-    // Free high-quality sample audio stream
-    fileUri: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3',
-    artworkUri: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
-    dateAdded: Date.now() - 3600000 * 2
-  },
-  {
-    id: 'starter_2',
-    title: 'Midnight Turntable Groove',
-    artist: 'DJ Sonic Wave',
-    album: 'Retro Hi-Fi Collection',
-    duration: 152,
-    fileUri: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=electronic-future-beats-117997.mp3',
-    artworkUri: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
-    dateAdded: Date.now() - 3600000 * 1
-  },
-  {
-    id: 'starter_3',
-    title: 'Acoustic Sunset Chill',
-    artist: 'Horizon Resonance',
-    album: 'Island Acoustics',
-    duration: 210,
-    fileUri: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=relaxed-vlog-131746.mp3',
-    artworkUri: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=500&auto=format&fit=crop&q=80',
-    dateAdded: Date.now()
-  }
-];
-
 export const LibraryProvider = ({ children }) => {
   const [songs, setSongs] = useState([]);
   const [playlists, setPlaylists] = useState([]);
@@ -55,35 +20,47 @@ export const LibraryProvider = ({ children }) => {
   }, []);
 
   const loadData = async () => {
-    let s = await storageService.get('songs', null);
-    if (!s || !Array.isArray(s) || s.length === 0) {
-      s = STARTER_SONGS;
-      await storageService.set('songs', STARTER_SONGS);
+    let s = await storageService.get('songs', []);
+    // Remove any previously seeded starter songs
+    if (Array.isArray(s)) {
+      s = s.filter(song => !song.id?.startsWith('starter_'));
+      await storageService.set('songs', s);
+    } else {
+      s = [];
+      await storageService.set('songs', []);
     }
-    const p = await storageService.get('playlists', [
-      {
-        id: 'pl_starter_1',
-        name: 'Favorites & Vibes',
-        songIds: [STARTER_SONGS[0].id, STARTER_SONGS[1].id],
-        dateCreated: Date.now() - 86400000
-      }
-    ]);
+
+    const p = await storageService.get('playlists', []);
+    const cleanPlaylists = (Array.isArray(p) ? p : [])
+      .filter(pl => pl.id !== 'pl_starter_1')
+      .map(pl => ({
+        ...pl,
+        songIds: (pl.songIds || []).filter(id => !id?.startsWith('starter_'))
+      }));
+    await storageService.set('playlists', cleanPlaylists);
+
     const sched = await storageService.get('schedules', []);
-    const recent = await storageService.get('recentlyPlayed', [STARTER_SONGS[0]]);
-    const history = await storageService.get('listeningHistory', [
-      {
-        id: generateId(),
-        songId: STARTER_SONGS[0].id,
-        title: STARTER_SONGS[0].title,
-        artist: STARTER_SONGS[0].artist,
-        album: STARTER_SONGS[0].album,
-        artworkUri: STARTER_SONGS[0].artworkUri,
-        playedAt: Date.now() - 1000 * 60 * 15
-      }
-    ]);
+
+    let recent = await storageService.get('recentlyPlayed', []);
+    if (Array.isArray(recent)) {
+      recent = recent.filter(song => !song.id?.startsWith('starter_'));
+      await storageService.set('recentlyPlayed', recent);
+    } else {
+      recent = [];
+      await storageService.set('recentlyPlayed', []);
+    }
+
+    let history = await storageService.get('listeningHistory', []);
+    if (Array.isArray(history)) {
+      history = history.filter(item => !item.songId?.startsWith('starter_'));
+      await storageService.set('listeningHistory', history);
+    } else {
+      history = [];
+      await storageService.set('listeningHistory', []);
+    }
 
     setSongs(s.sort((a, b) => a.title.localeCompare(b.title)));
-    setPlaylists(p);
+    setPlaylists(cleanPlaylists);
     setSchedules(sched);
     setRecentlyPlayed(recent);
     setListeningHistory(history);
@@ -157,10 +134,29 @@ export const LibraryProvider = ({ children }) => {
 
   const addMusic = async (fileObjects) => {
     const newSongs = [...songs];
+    const duplicates = [];
+    let addedCount = 0;
+
     for (const fileObj of fileObjects) {
       try {
         const metadata = await parseMetadata(fileObj);
         const fileName = fileObj.name || `track_${Date.now()}.mp3`;
+        const cleanBaseName = fileName.replace(/\.[^/.]+$/, '').trim().toLowerCase();
+        const candidateTitle = (metadata.title || '').trim().toLowerCase();
+
+        // Duplicate Check: compare against existing songs and newly added files in current batch
+        const isDuplicate = newSongs.some(existing => {
+          const existingTitle = (existing.title || '').trim().toLowerCase();
+          const titleMatches = existingTitle === candidateTitle || existingTitle === cleanBaseName;
+          const sizeMatches = existing.fileSize && fileObj.size && existing.fileSize === fileObj.size;
+          return titleMatches || (sizeMatches && Math.abs((existing.duration || 0) - (metadata.duration || 0)) <= 2);
+        });
+
+        if (isDuplicate) {
+          duplicates.push(metadata.title || fileName);
+          continue; // Block duplicate from being added
+        }
+
         const uri = await fileService.saveFileToPrivateStorage(fileObj, fileName);
 
         const song = {
@@ -169,18 +165,30 @@ export const LibraryProvider = ({ children }) => {
           artist: metadata.artist,
           album: metadata.album,
           duration: metadata.duration,
+          fileSize: fileObj.size || 0,
           fileUri: uri,
           artworkUri: metadata.artwork,
           dateAdded: Date.now()
         };
         newSongs.push(song);
+        addedCount++;
       } catch (e) {
         console.error("Failed to add song", e);
       }
     }
-    const sorted = newSongs.sort((a, b) => a.title.localeCompare(b.title));
-    setSongs(sorted);
-    await storageService.set('songs', sorted);
+
+    if (addedCount > 0) {
+      const sorted = newSongs.sort((a, b) => a.title.localeCompare(b.title));
+      setSongs(sorted);
+      await storageService.set('songs', sorted);
+    }
+
+    return {
+      success: addedCount > 0,
+      addedCount,
+      duplicates,
+      totalPicked: fileObjects.length
+    };
   };
 
   const renameSong = async (id, newTitle) => {

@@ -3,7 +3,7 @@ import { useLibrary } from '../context/LibraryContext';
 import { usePlayer } from '../context/PlayerContext';
 import { fileService } from '../services/fileService';
 import { useNavigate } from 'react-router-dom';
-import { Music } from 'lucide-react';
+import { Music, SlidersHorizontal, Calendar, ArrowDownAZ, ArrowUpZA, HardDrive, Check, X } from 'lucide-react';
 import SongItem from '../components/SongItem';
 import AddMusicButton from '../components/AddMusicButton';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -20,12 +20,87 @@ const Library = () => {
   const [songForCover, setSongForCover] = useState(null);
   // Single active menu state: only ONE song menu can be open at a time
   const [openMenuSongId, setOpenMenuSongId] = useState(null);
+  // Filter and Sort state
+  const [sortBy, setSortBy] = useState('date-desc');
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   const filteredSongs = songs.filter(s => 
     s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (s.album && s.album.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const sortedSongs = [...filteredSongs].sort((a, b) => {
+    switch (sortBy) {
+      case 'date-desc':
+        return (b.dateAdded || 0) - (a.dateAdded || 0);
+      case 'date-asc':
+        return (a.dateAdded || 0) - (b.dateAdded || 0);
+      case 'name-asc':
+        return (a.title || '').localeCompare(b.title || '');
+      case 'name-desc':
+        return (b.title || '').localeCompare(a.title || '');
+      case 'size-desc': {
+        const sizeA = a.fileSize || (a.duration ? a.duration * 40000 : 0);
+        const sizeB = b.fileSize || (b.duration ? b.duration * 40000 : 0);
+        return sizeB - sizeA;
+      }
+      case 'size-asc': {
+        const sizeA = a.fileSize || (a.duration ? a.duration * 40000 : 0);
+        const sizeB = b.fileSize || (b.duration ? b.duration * 40000 : 0);
+        return sizeA - sizeB;
+      }
+      default:
+        return 0;
+    }
+  });
+
+  const sortOptions = [
+    {
+      id: 'date-desc',
+      category: 'DATES (PETSA)',
+      label: 'Date: Newest First',
+      sublabel: 'Pinakabagong Idinagdag',
+      icon: Calendar
+    },
+    {
+      id: 'date-asc',
+      category: 'DATES (PETSA)',
+      label: 'Date: Oldest First',
+      sublabel: 'Pinakalumang Idinagdag',
+      icon: Calendar
+    },
+    {
+      id: 'name-asc',
+      category: 'NAMES (PANGALAN)',
+      label: 'Name: A to Z',
+      sublabel: 'Alphabetical simula A hanggang Z',
+      icon: ArrowDownAZ
+    },
+    {
+      id: 'name-desc',
+      category: 'NAMES (PANGALAN)',
+      label: 'Name: Z to A',
+      sublabel: 'Baliktad mula Z hanggang A',
+      icon: ArrowUpZA
+    },
+    {
+      id: 'size-desc',
+      category: 'SONG SIZE (LAKI NG KANTA)',
+      label: 'Size: Largest First',
+      sublabel: 'Pinakamalaking file / haba',
+      icon: HardDrive
+    },
+    {
+      id: 'size-asc',
+      category: 'SONG SIZE (LAKI NG KANTA)',
+      label: 'Size: Smallest First',
+      sublabel: 'Pinakamaliit na file / sukat',
+      icon: HardDrive
+    },
+  ];
+
+  const currentSortObj = sortOptions.find(o => o.id === sortBy) || sortOptions[0];
 
   const handleToggleMenu = (songId) => {
     // If clicking same song, toggle off. Otherwise switch to the new single song.
@@ -77,11 +152,11 @@ const Library = () => {
   };
 
   return (
-    <div className="pb-44 px-4 max-w-2xl mx-auto min-h-screen select-none relative">
+    <div className="pb-60 sm:pb-64 px-4 max-w-2xl mx-auto min-h-screen select-none relative">
       {/* Backdrop overlay for closing any open song menu on click outside */}
       {openMenuSongId && (
         <div 
-          className="fixed inset-0 z-20 bg-transparent"
+          className="fixed inset-0 z-35 bg-black/10 dark:bg-black/30 backdrop-blur-[1px]"
           onClick={() => setOpenMenuSongId(null)}
           onTouchStart={() => setOpenMenuSongId(null)}
         />
@@ -104,8 +179,8 @@ const Library = () => {
         </div>
       </div>
 
-      {/* Search and Add Music bar */}
-      <div className="flex items-center gap-3 mb-6">
+      {/* Search, Filter, and Add Music bar */}
+      <div className="flex items-center gap-2 sm:gap-3 mb-4">
         <input 
           type="text" 
           placeholder="SEARCH MUSIC / SONGS..." 
@@ -114,25 +189,142 @@ const Library = () => {
             setSearchQuery(e.target.value);
             setOpenMenuSongId(null);
           }}
-          className="flex-1 bg-indigo-50 dark:bg-slate-900 text-indigo-950 dark:text-indigo-50 px-5 py-4 rounded-2xl max-border max-shadow outline-none focus:ring-4 focus:ring-indigo-400 font-bold uppercase placeholder-slate-600 dark:placeholder-slate-400 text-sm sm:text-base"
+          className="flex-1 min-w-0 bg-indigo-50 dark:bg-slate-900 text-indigo-950 dark:text-indigo-50 px-4 sm:px-5 py-3.5 sm:py-4 rounded-2xl max-border max-shadow outline-none focus:ring-4 focus:ring-indigo-400 font-bold uppercase placeholder-slate-600 dark:placeholder-slate-400 text-sm sm:text-base"
         />
+
+        {/* Filter Button */}
+        <button
+          id="library-filter-btn"
+          type="button"
+          onClick={() => setShowFilterModal(true)}
+          className={`flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-3.5 sm:py-4 rounded-2xl max-border max-shadow transition-all shrink-0 cursor-pointer shadow-md active:scale-95 ${
+            sortBy !== 'date-desc'
+              ? 'bg-amber-400 text-slate-950 font-black'
+              : 'bg-indigo-100 hover:bg-indigo-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-950 dark:text-white font-black'
+          }`}
+          title="Filter and Sort Music Library (Ayusin ayon sa Petsa, Pangalan, o Laki ng Kanta)"
+        >
+          <SlidersHorizontal size={20} className="stroke-[2.5]" />
+          <span className="text-xs sm:text-sm uppercase hidden xs:inline">FILTER</span>
+        </button>
+
         <AddMusicButton />
       </div>
 
-      {/* Track count indicator */}
-      <div className="flex items-center justify-between mb-4 px-1">
-        <span className="text-xs font-black uppercase tracking-widest text-indigo-950 dark:text-white">
-          ALL SONGS ({filteredSongs.length})
-        </span>
+      {/* Track count indicator & Active Sort Filter Chip */}
+      <div className="flex items-center justify-between mb-4 px-1 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black uppercase tracking-widest text-indigo-950 dark:text-white">
+            ALL SONGS ({sortedSongs.length})
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowFilterModal(true)}
+            className="flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-indigo-600 text-white dark:bg-indigo-400 dark:text-slate-950 max-border shadow-xs hover:opacity-90 cursor-pointer"
+            title="Baguhin ang filter/sort"
+          >
+            <SlidersHorizontal size={10} />
+            <span>{currentSortObj.label}</span>
+          </button>
+        </div>
         <span className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 bg-amber-400/20 px-2.5 py-0.5 rounded border border-amber-500/40">
           OFFLINE READY
         </span>
       </div>
 
+      {/* Filter / Sort Selection Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 max-border rounded-3xl max-shadow p-5 sm:p-6 w-full max-w-md relative animate-scaleUp max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b-2 border-indigo-100 dark:border-slate-800 pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center max-border shadow-sm">
+                  <SlidersHorizontal size={20} className="stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                    Filter & Sort Songs
+                  </h3>
+                  <p className="text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-amber-300">
+                    AYUSIN ANG MGA KANTA
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-full transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-2 mb-6">
+              {sortOptions.map((opt) => {
+                const Icon = opt.icon;
+                const isSelected = sortBy === opt.id;
+                return (
+                  <div
+                    key={opt.id}
+                    onClick={() => {
+                      setSortBy(opt.id);
+                      setShowFilterModal(false);
+                    }}
+                    className={`p-3.5 rounded-2xl max-border cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white shadow-[3px_3px_0_#000]'
+                        : 'bg-indigo-50/70 hover:bg-indigo-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-900 dark:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        isSelected ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'
+                      }`}>
+                        <Icon size={18} className="stroke-[2.5]" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-black uppercase tracking-wider ${
+                            isSelected ? 'text-indigo-200' : 'text-indigo-600 dark:text-indigo-300'
+                          }`}>
+                            {opt.category}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black uppercase tracking-tight truncate">
+                          {opt.label}
+                        </h4>
+                        <p className={`text-[11px] font-bold truncate ${
+                          isSelected ? 'text-indigo-100' : 'text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {opt.sublabel}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isSelected && (
+                      <div className="w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-sm">
+                        <Check size={14} className="stroke-[3]" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setShowFilterModal(false)}
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-wide rounded-2xl max-border shadow-md active:scale-95 transition-all text-sm cursor-pointer"
+            >
+              ILAPAT ANG FILTER (APPLY)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Song List */}
       <div className="space-y-4">
-        {filteredSongs.length > 0 ? (
-          filteredSongs.map(song => (
+        {sortedSongs.length > 0 ? (
+          sortedSongs.map(song => (
             <SongItem 
               key={song.id} 
               song={song} 
@@ -185,7 +377,7 @@ const Library = () => {
 
       {/* Add To Playlist Modal */}
       {songToAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
           <div className="bg-indigo-50 dark:bg-slate-800 max-border rounded-3xl max-shadow p-6 sm:p-8 w-full max-w-sm">
             <h3 className="text-2xl sm:text-3xl font-black mb-4 uppercase text-indigo-950 dark:text-indigo-50 tracking-tight drop-shadow-[2px_2px_0_#c7d2fe] dark:drop-shadow-[2px_2px_0_#312e81]">
               Add to Playlist
