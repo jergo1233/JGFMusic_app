@@ -12,7 +12,7 @@ export const DjCdHand = ({ isPlaying = false, onClick, className = "" }) => {
             ? 'opacity-85 hover:opacity-100 hover:scale-[1.02]'
             : 'opacity-100 scale-100'
         }`}
-        title={isPlaying ? "Hawakan / tapikin ang CD para i-pause" : "Bitiwan ang CD para mag-play"}
+        title={isPlaying ? "Touch or tap CD to pause" : "Release CD to play"}
       >
         <svg
           viewBox="0 0 300 300"

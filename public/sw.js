@@ -183,7 +183,7 @@ self.addEventListener('message', async (event) => {
             // Always show high-priority system alarm notification with audio chime & action buttons
             // This ensures it rings and wakes the phone even when closed or standing
             await self.registration.showNotification(`⏰ ALARM: ${sched.title}`, {
-              body: `Oras na ng kanta! ${clientNotified ? 'Kasalukuyang nagpe-play na!' : 'I-tap para mag-play agad.'}`,
+              body: `Scheduled music time! ${clientNotified ? 'Now playing!' : 'Tap to start playback.'}`,
               icon: '/icon.svg',
               badge: '/icon.svg',
               tag: `sched_alarm_${sched.id}`,
@@ -191,7 +191,7 @@ self.addEventListener('message', async (event) => {
               requireInteraction: true,
               vibrate: [300, 100, 300, 100, 400],
               actions: [
-                { action: 'play', title: '▶ PLAY AGAD' },
+                { action: 'play', title: '▶ PLAY NOW' },
                 { action: 'dismiss', title: '✖ DISMISS' }
               ],
               data: {

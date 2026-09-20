@@ -205,7 +205,7 @@ const SongItem = ({
             ? 'text-white hover:text-amber-300 dark:text-indigo-950 dark:hover:text-indigo-800' 
             : 'text-indigo-950 hover:text-indigo-700 dark:text-indigo-100 dark:hover:text-amber-300'
         } hover:scale-110 active:scale-95 cursor-pointer`}
-        title="Custom Music Cover (Palitan ang cover)"
+        title="Change Song Artwork / Cover"
       >
         <ImageIcon size={22} className="stroke-[2.5]" />
       </button>

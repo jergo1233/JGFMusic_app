@@ -26,7 +26,7 @@ const AddMusicButton = () => {
       }
     } catch (e) {
       console.error(e);
-      alert("Hindi ma-access ang files.");
+      alert("Unable to access files.");
     }
   };
 
@@ -36,7 +36,7 @@ const AddMusicButton = () => {
         id="add-music-library-btn"
         onClick={handleAddMusic}
         className="flex items-center justify-center gap-1.5 sm:gap-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-50 dark:hover:bg-white text-white dark:text-indigo-950 px-4 sm:px-5 py-4 font-black uppercase text-sm sm:text-base max-border rounded-2xl max-shadow hover:translate-y-0.5 hover:translate-x-0.5 transition-all shrink-0 cursor-pointer shadow-md active:scale-95"
-        title="Add Music from your device (Magdagdag ng kanta)"
+        title="Add Music from your device"
       >
         <Plus size={22} className="stroke-[3]" />
         <span>ADD</span>
@@ -63,7 +63,7 @@ const AddMusicButton = () => {
                   Existing Song Detected
                 </h3>
                 <p className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                  {duplicateModal.addedCount > 0 ? 'PARTIALLY ADDED' : 'HINDI PWEDE ANG DUPLICATE'}
+                  {duplicateModal.addedCount > 0 ? 'PARTIALLY ADDED' : 'DUPLICATES NOT ALLOWED'}
                 </p>
               </div>
             </div>
@@ -71,11 +71,11 @@ const AddMusicButton = () => {
             <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-relaxed">
               {duplicateModal.addedCount > 0 ? (
                 <>
-                  Matagumpay na naidagdag ang <span className="text-emerald-700 dark:text-emerald-400 font-black">{duplicateModal.addedCount} bagong kanta</span>. Subalit ang sumusunod na kanta ay <span className="text-amber-700 dark:text-amber-400 font-black">existing na sa iyong library</span> kaya hindi na ito pinayagang madoble:
+                  Successfully added <span className="text-emerald-700 dark:text-emerald-400 font-black">{duplicateModal.addedCount} new songs</span>. However, the following tracks <span className="text-amber-700 dark:text-amber-400 font-black">already exist in your library</span> and duplicates were skipped:
                 </>
               ) : (
                 <>
-                  Hindi pinayagan ang pag-add dahil ang kantang pinili mo ay <span className="text-amber-700 dark:text-amber-400 font-black">may kapareho na sa iyong Music Library</span>:
+                  Addition skipped because the selected tracks <span className="text-amber-700 dark:text-amber-400 font-black">already exist in your Music Library</span>:
                 </>
               )}
             </p>

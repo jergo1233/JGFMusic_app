@@ -74,7 +74,7 @@ const NowPlayingPage = () => {
           type="button"
           onClick={() => setShowCoverModal(true)}
           className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-indigo-900/60 dark:border-indigo-300/60 bg-indigo-100/90 dark:bg-slate-800/90 text-amber-500 hover:text-amber-400 shadow-sm hover:bg-white dark:hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-          title="Palitan ang cover ng kanta"
+          title="Change song cover artwork"
         >
           <ImageIcon size={18} className="stroke-[2.5]" />
         </button>

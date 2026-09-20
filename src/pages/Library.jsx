@@ -58,44 +58,44 @@ const Library = () => {
   const sortOptions = [
     {
       id: 'date-desc',
-      category: 'DATES (PETSA)',
+      category: 'DATE ADDED',
       label: 'Date: Newest First',
-      sublabel: 'Pinakabagong Idinagdag',
+      sublabel: 'Most Recently Added',
       icon: Calendar
     },
     {
       id: 'date-asc',
-      category: 'DATES (PETSA)',
+      category: 'DATE ADDED',
       label: 'Date: Oldest First',
-      sublabel: 'Pinakalumang Idinagdag',
+      sublabel: 'Earliest Added',
       icon: Calendar
     },
     {
       id: 'name-asc',
-      category: 'NAMES (PANGALAN)',
+      category: 'ALPHABETICAL',
       label: 'Name: A to Z',
-      sublabel: 'Alphabetical simula A hanggang Z',
+      sublabel: 'Alphabetical from A to Z',
       icon: ArrowDownAZ
     },
     {
       id: 'name-desc',
-      category: 'NAMES (PANGALAN)',
+      category: 'ALPHABETICAL',
       label: 'Name: Z to A',
-      sublabel: 'Baliktad mula Z hanggang A',
+      sublabel: 'Reverse from Z to A',
       icon: ArrowUpZA
     },
     {
       id: 'size-desc',
-      category: 'SONG SIZE (LAKI NG KANTA)',
+      category: 'SONG SIZE / DURATION',
       label: 'Size: Largest First',
-      sublabel: 'Pinakamalaking file / haba',
+      sublabel: 'Largest file size / longest',
       icon: HardDrive
     },
     {
       id: 'size-asc',
-      category: 'SONG SIZE (LAKI NG KANTA)',
+      category: 'SONG SIZE / DURATION',
       label: 'Size: Smallest First',
-      sublabel: 'Pinakamaliit na file / sukat',
+      sublabel: 'Smallest file size / shortest',
       icon: HardDrive
     },
   ];
@@ -202,7 +202,7 @@ const Library = () => {
               ? 'bg-amber-400 text-slate-950 font-black'
               : 'bg-indigo-100 hover:bg-indigo-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-950 dark:text-white font-black'
           }`}
-          title="Filter and Sort Music Library (Ayusin ayon sa Petsa, Pangalan, o Laki ng Kanta)"
+          title="Filter and Sort Music Library"
         >
           <SlidersHorizontal size={20} className="stroke-[2.5]" />
           <span className="text-xs sm:text-sm uppercase hidden xs:inline">FILTER</span>
@@ -221,7 +221,7 @@ const Library = () => {
             type="button"
             onClick={() => setShowFilterModal(true)}
             className="flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-indigo-600 text-white dark:bg-indigo-400 dark:text-slate-950 max-border shadow-xs hover:opacity-90 cursor-pointer"
-            title="Baguhin ang filter/sort"
+            title="Change filter/sort"
           >
             <SlidersHorizontal size={10} />
             <span>{currentSortObj.label}</span>
@@ -246,7 +246,7 @@ const Library = () => {
                     Filter & Sort Songs
                   </h3>
                   <p className="text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-amber-300">
-                    AYUSIN ANG MGA KANTA
+                    ORGANIZE YOUR MUSIC
                   </p>
                 </div>
               </div>
@@ -315,7 +315,7 @@ const Library = () => {
               onClick={() => setShowFilterModal(false)}
               className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-wide rounded-2xl max-border shadow-md active:scale-95 transition-all text-sm cursor-pointer"
             >
-              ILAPAT ANG FILTER (APPLY)
+              APPLY FILTER
             </button>
           </div>
         </div>

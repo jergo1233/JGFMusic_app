@@ -75,7 +75,7 @@ export const schedulerService = {
         setTimeout(() => {
           try {
             new Notification('⏰ JGFMusic Scheduled Alarm', {
-              body: `Oras na: "${scheduleItem.title}". I-tap para magpatugtog.`,
+              body: `Time for music: "${scheduleItem.title}". Tap to start playing.`,
               icon: '/icon.svg'
             });
           } catch (err) {

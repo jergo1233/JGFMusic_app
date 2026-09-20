@@ -37,7 +37,7 @@ const PlayerControls = ({
           id="player-prev-btn"
           onClick={onPrev} 
           className="w-13 h-13 sm:w-14 sm:h-14 flex items-center justify-center bg-indigo-50 dark:bg-slate-800 text-indigo-950 dark:text-indigo-50 max-border rounded-2xl shadow-[4px_4px_0_0_#000] dark:shadow-[4px_4px_0_0_#fff] hover:translate-x-0.5 hover:translate-y-0.5 active:scale-90 transition-all cursor-pointer"
-          title="Previous Song (Nakaraang kanta)"
+          title="Previous Track"
         >
           <SkipBack size={26} className="stroke-[3]" />
         </button>
@@ -52,7 +52,7 @@ const PlayerControls = ({
               ? 'bg-amber-400 text-slate-950' 
               : 'bg-indigo-600 dark:bg-indigo-50 text-white dark:text-indigo-950'
           }`} 
-          title={isPlaying ? "Pause Song" : "Play Song"}
+          title={isPlaying ? "Pause Track" : "Play Track"}
         >
           {isPlaying ? (
             <Pause size={34} fill="currentColor" />
@@ -67,7 +67,7 @@ const PlayerControls = ({
           id="player-next-btn"
           onClick={onNext} 
           className="w-13 h-13 sm:w-14 sm:h-14 flex items-center justify-center bg-indigo-50 dark:bg-slate-800 text-indigo-950 dark:text-indigo-50 max-border rounded-2xl shadow-[4px_4px_0_0_#000] dark:shadow-[4px_4px_0_0_#fff] hover:translate-x-0.5 hover:translate-y-0.5 active:scale-90 transition-all cursor-pointer"
-          title="Next Song (Susunod na kanta)"
+          title="Next Track"
         >
           <SkipForward size={26} className="stroke-[3]" />
         </button>

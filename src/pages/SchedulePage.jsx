@@ -126,7 +126,7 @@ const SchedulePage = () => {
       await saveSchedules(updated);
 
       setShowForm(false);
-      setSuccessMessage(`Saved! Naka-schedule ang "${title}" sa ${finalDate} nang ${finalTime}. Tuloy ang play kahit naka-standby o naka-off ang screen!`);
+      setSuccessMessage(`Saved! Scheduled "${title}" for ${finalDate} at ${finalTime}. Playback will trigger reliably even if device is idle or screen is locked.`);
       setTimeout(() => setSuccessMessage(''), 6000);
     } catch (e) {
       console.error('Failed to schedule:', e);

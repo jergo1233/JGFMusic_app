@@ -41,7 +41,7 @@ const MiniPlayer = () => {
       <div 
         onClick={handleProgressBarClick}
         className="w-full bg-indigo-200/70 dark:bg-slate-800 h-1.5 sm:h-2 cursor-pointer relative group overflow-hidden"
-        title="I-click para mag-seek sa kanta"
+        title="Click to seek track"
       >
         <div 
           className="h-full bg-gradient-to-r from-amber-400 via-indigo-500 to-purple-500 transition-all duration-100 relative"
@@ -57,7 +57,7 @@ const MiniPlayer = () => {
         <Link 
           to="/now-playing" 
           className="flex items-center min-w-0 flex-1 overflow-hidden py-1 group cursor-pointer"
-          title="Buksan ang full Now Playing screen"
+          title="Open Now Playing"
         >
           {/* Song Album Art / CD Disc */}
           <div className={`w-11 h-11 sm:w-12 sm:h-12 bg-slate-900 max-border rounded-xl flex-shrink-0 flex items-center justify-center relative overflow-hidden transition-all shadow-sm ${isPlaying ? 'playing-thumb-beat border-purple-400' : ''}`}>
@@ -105,7 +105,7 @@ const MiniPlayer = () => {
               handlePrevious(); 
             }}
             className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-indigo-100/90 dark:bg-slate-800 text-indigo-950 dark:text-indigo-50 hover:bg-indigo-200 dark:hover:bg-slate-700 active:scale-90 transition-all border border-indigo-900/15 dark:border-indigo-200/15 shadow-sm cursor-pointer"
-            title="Nakaraang kanta (Previous)"
+            title="Previous track"
           >
             <SkipBack size={18} className="stroke-[2.8]" />
           </button>
@@ -143,7 +143,7 @@ const MiniPlayer = () => {
               handleNext(); 
             }}
             className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-indigo-100/90 dark:bg-slate-800 text-indigo-950 dark:text-indigo-50 hover:bg-indigo-200 dark:hover:bg-slate-700 active:scale-90 transition-all border border-indigo-900/15 dark:border-indigo-200/15 shadow-sm cursor-pointer"
-            title="Susunod na kanta (Next)"
+            title="Next track"
           >
             <SkipForward size={18} className="stroke-[2.8]" />
           </button>
@@ -158,7 +158,7 @@ const MiniPlayer = () => {
               closePlayer(); 
             }}
             className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors active:scale-90 cursor-pointer ml-0.5"
-            title="Isara ang player"
+            title="Close player"
           >
             <X size={17} strokeWidth={2.8} />
           </button>

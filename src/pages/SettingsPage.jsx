@@ -29,7 +29,7 @@ const SettingsPage = () => {
 
   const handleForceUpdate = async () => {
     setUpdating(true);
-    setUpdateMsg('Nililinis ang lumang cache at kinukuha ang pinakabagong bersyon...');
+    setUpdateMsg('Clearing old cache and fetching the latest application version...');
     try {
       // 1. Unregister active service workers
       if ('serviceWorker' in navigator) {
@@ -48,7 +48,7 @@ const SettingsPage = () => {
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
 
-      setUpdateMsg('Tagumpay! Nagre-refresh na ang web app...');
+      setUpdateMsg('Success! Refreshing the web app now...');
       setTimeout(() => {
         // Force bypass browser cache reload
         window.location.reload();
@@ -166,7 +166,7 @@ const SettingsPage = () => {
                 </span>
               </div>
               <p className="text-indigo-700 dark:text-amber-300 text-xs sm:text-sm font-black uppercase tracking-wide">
-                Kuhanin ang pinakabagong bersyon at linisin ang lumang cache
+                Get the latest update and clear cached assets
               </p>
             </div>
           </div>
@@ -176,7 +176,7 @@ const SettingsPage = () => {
             disabled={updating}
             onClick={handleForceUpdate}
             className="px-5 py-3 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs uppercase rounded-xl max-border flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm self-start sm:self-auto cursor-pointer disabled:opacity-50"
-            title="I-refresh at alisin ang lumang naka-cache na mga file"
+            title="Refresh and clear cached application files"
           >
             <RefreshCw size={15} className={updating ? 'animate-spin' : ''} />
             <span>{updating ? 'UPDATING...' : 'CHECK UPDATE'}</span>
@@ -417,7 +417,7 @@ const SettingsPage = () => {
           </div>
         </div>
         <div className="p-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 text-xs text-indigo-50 leading-relaxed font-bold">
-          "Maligayang pagbati at maraming salamat sa paggamit ng JGFMusic! Ang application na ito ay buong-pusong dinisenyo at binuo ni <span className="text-amber-300 underline font-black">Jerome Urbano</span> bilang siyang opisyal na developer at creator ng app na ito."
+          "Welcome and thank you for using JGFMusic! This application was crafted and built by <span className="text-amber-300 underline font-black">Jerome Urbano</span> as the lead developer and creator."
         </div>
       </div>
 
@@ -440,15 +440,15 @@ const SettingsPage = () => {
             <div className="space-y-2 text-xs font-bold text-gray-700 dark:text-gray-300">
               <div className="p-2 rounded-xl bg-white dark:bg-slate-800 max-border flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center">1</span>
-                <span>Buksan ang link sa Chrome sa iyong phone.</span>
+                <span>Open this link in Chrome on your phone.</span>
               </div>
               <div className="p-2 rounded-xl bg-white dark:bg-slate-800 max-border flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center">2</span>
-                <span>Pindutin ang 3 dots menu sa browser.</span>
+                <span>Tap the 3 dots menu in your browser.</span>
               </div>
               <div className="p-2 rounded-xl bg-white dark:bg-slate-800 max-border flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">3</span>
-                <span>Piliin ang "Install App" o "Add to Home Screen".</span>
+                <span>Select "Install App" or "Add to Home Screen".</span>
               </div>
             </div>
             <div className="flex gap-2 pt-1">
