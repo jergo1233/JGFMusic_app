@@ -1,6 +1,6 @@
 // JGFMusic Progressive Web App Service Worker
-// Version: 2.1.0
-const CACHE_NAME = 'jgfmusic-cache-v2.1';
+// Version: 2.2.0 (Automatic Cache Invalidation & Network-First for App Shell)
+const CACHE_NAME = 'jgfmusic-cache-v2.2.0';
 
 // Critical core assets to precache on install
 const PRECACHE_ASSETS = [
@@ -129,10 +129,23 @@ self.addEventListener('fetch', (event) => {
 // Background Schedule Timers map
 let activeScheduleTimers = new Map();
 
-// Listen for message events (e.g. manual skipWaiting or SYNC_SCHEDULES)
-self.addEventListener('message', (event) => {
+// Listen for message events (e.g. manual skipWaiting, CLEAR_CACHE, or SYNC_SCHEDULES)
+self.addEventListener('message', async (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      console.log('Service Worker caches cleared.');
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: true });
+      }
+    } catch (err) {
+      console.error('Failed to clear caches:', err);
+    }
   }
 
   if (event.data && event.data.type === 'SYNC_SCHEDULES') {

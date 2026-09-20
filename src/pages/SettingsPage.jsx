@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Zap, Disc, Waves, Check, Play, Download,
-  Copy, ExternalLink, X, Upload, RotateCcw, Sparkles, Code, Award, Heart 
+  Copy, ExternalLink, X, Upload, RotateCcw, Sparkles, Code, Award, Heart, RefreshCw
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { fileService } from '../services/fileService';
@@ -23,6 +23,41 @@ const SettingsPage = () => {
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
+
+  const [updating, setUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState('');
+
+  const handleForceUpdate = async () => {
+    setUpdating(true);
+    setUpdateMsg('Nililinis ang lumang cache at kinukuha ang pinakabagong bersyon...');
+    try {
+      // 1. Unregister active service workers
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          if (reg.active) {
+            reg.active.postMessage({ type: 'CLEAR_CACHE' });
+          }
+          await reg.unregister();
+        }
+      }
+
+      // 2. Clear browser Cache Storage
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+
+      setUpdateMsg('Tagumpay! Nagre-refresh na ang web app...');
+      setTimeout(() => {
+        // Force bypass browser cache reload
+        window.location.reload();
+      }, 800);
+    } catch (err) {
+      console.error('Update error:', err);
+      window.location.reload();
+    }
+  };
 
   const handleInstallClick = async () => {
     if (isInstallable) {
@@ -114,6 +149,46 @@ const SettingsPage = () => {
 
   return (
     <div className="pb-56 sm:pb-64 px-4 max-w-2xl mx-auto min-h-screen select-none">
+      {/* Check for Updates / Sync Latest Version Card */}
+      <div className="bg-indigo-50 dark:bg-slate-800 max-border rounded-3xl max-shadow p-5 sm:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 max-border flex items-center justify-center flex-shrink-0 shadow-sm">
+              <RefreshCw size={22} className={`stroke-[2.5] ${updating ? 'animate-spin' : ''}`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-indigo-950 dark:text-white text-xl sm:text-2xl uppercase tracking-tight">
+                  Update App
+                </h3>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 text-white dark:bg-indigo-400 dark:text-slate-950">
+                  V2.2.0
+                </span>
+              </div>
+              <p className="text-indigo-700 dark:text-amber-300 text-xs sm:text-sm font-black uppercase tracking-wide">
+                Kuhanin ang pinakabagong bersyon at linisin ang lumang cache
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            id="force-update-app-btn"
+            disabled={updating}
+            onClick={handleForceUpdate}
+            className="px-5 py-3 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs uppercase rounded-xl max-border flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm self-start sm:self-auto cursor-pointer disabled:opacity-50"
+            title="I-refresh at alisin ang lumang naka-cache na mga file"
+          >
+            <RefreshCw size={15} className={updating ? 'animate-spin' : ''} />
+            <span>{updating ? 'UPDATING...' : 'CHECK UPDATE'}</span>
+          </button>
+        </div>
+        {updateMsg && (
+          <div className="mt-3 p-3 bg-white dark:bg-slate-900 max-border rounded-xl text-xs font-black text-indigo-900 dark:text-amber-300 animate-fadeIn">
+            {updateMsg}
+          </div>
+        )}
+      </div>
+
       {/* Install App Section */}
       <div className="bg-indigo-50 dark:bg-slate-800 max-border rounded-3xl max-shadow p-5 sm:p-6 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
