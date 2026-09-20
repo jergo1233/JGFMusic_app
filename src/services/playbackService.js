@@ -68,15 +68,16 @@ class PlaybackService {
     }
   }
 
-  play() {
-    const playPromise = this.audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(e => {
-        console.warn("Playback autoplay/play caught:", e);
-      });
-    }
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = 'playing';
+  async play() {
+    try {
+      await this.audio.play();
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
+      return { success: true };
+    } catch (e) {
+      console.warn("Playback autoplay/play caught:", e);
+      return { success: false, error: e };
     }
   }
 

@@ -60,17 +60,25 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
     if (progress >= 100 && !isExiting) {
       const exitTimer = setTimeout(() => {
         handleProceed();
-      }, 400);
+      }, 300);
       return () => clearTimeout(exitTimer);
     }
   }, [progress, isExiting]);
+
+  // Failsafe timer: unconditionally dismiss if timer lags or is throttled
+  useEffect(() => {
+    const failsafe = setTimeout(() => {
+      handleProceed();
+    }, 2400);
+    return () => clearTimeout(failsafe);
+  }, []);
 
   const handleProceed = () => {
     if (isExiting) return;
     setIsExiting(true);
     setTimeout(() => {
       onComplete?.();
-    }, 350);
+    }, 200);
   };
 
   // Shared Logo Component
@@ -104,6 +112,15 @@ const SplashScreen = ({ onComplete, overrideStyle }) => {
           transition={{ duration: 0.35, ease: 'easeInOut' }}
           className="fixed inset-0 z-[100] flex flex-col items-center justify-between p-5 select-none overflow-hidden"
         >
+          {/* Quick Skip Control to guarantee zero waiting and instant access */}
+          <button
+            onClick={handleProceed}
+            className="absolute top-4 right-4 z-50 px-3 py-1.5 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider bg-black/60 hover:bg-black/80 text-white/90 border border-white/20 backdrop-blur-md cursor-pointer transition-all active:scale-95 shadow-md flex items-center gap-1.5"
+            title="Skip Intro"
+          >
+            <span>Skip</span>
+            <ArrowRight size={13} />
+          </button>
           {/* ========================================================= */}
           {/* STYLE 1: NEON PULSE (Cyberpunk / Neon EDM Beat System)   */}
           {/* ========================================================= */}

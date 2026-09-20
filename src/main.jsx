@@ -1,15 +1,30 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import './index.css';
 
-// Register service worker for installable PWA with automatic update detection
+// Global resilience handlers to prevent unexpected blank white screens
+window.addEventListener('unhandledrejection', (event) => {
+  console.warn('Unhandled Promise Rejection prevented from crashing app:', event.reason);
+});
+
+// Register service worker for installable PWA safely
 if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
+    // If in dev mode, avoid caching Vite modules to prevent white screens
+    if (import.meta.env.DEV) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister();
+        }
+      });
+      return;
+    }
+
     navigator.serviceWorker
       .register('/sw.js')
       .then((reg) => {
-        // Check for SW updates every time the user visits or focuses the tab
         reg.update();
 
         reg.addEventListener('updatefound', () => {
@@ -17,7 +32,7 @@ if ('serviceWorker' in navigator && window.location.protocol.startsWith('http'))
           if (installingWorker) {
             installingWorker.addEventListener('statechange', () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New update available, notify user or auto-activate
+                // New update available, notify or prompt smoothly without blank-screen reload
                 installingWorker.postMessage({ type: 'SKIP_WAITING' });
               }
             });
@@ -27,21 +42,14 @@ if ('serviceWorker' in navigator && window.location.protocol.startsWith('http'))
       .catch((err) => {
         console.warn('Service worker registration failed:', err);
       });
-
-    // When new service worker takes over, reload the window once to show updated app
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
-    });
   });
 }
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 );
 

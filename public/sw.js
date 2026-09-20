@@ -191,7 +191,7 @@ self.addEventListener('message', async (event) => {
               requireInteraction: true,
               vibrate: [300, 100, 300, 100, 400],
               actions: [
-                { action: 'play', title: '▶ PLAY NOW' },
+                { action: 'play', title: '▶ PLAY NOW ✅' },
                 { action: 'dismiss', title: '✖ DISMISS' }
               ],
               data: {

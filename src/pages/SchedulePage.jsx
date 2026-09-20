@@ -198,6 +198,23 @@ const SchedulePage = () => {
         </div>
       )}
 
+      {/* Auto-Play & Background Playback Assurance Banner */}
+      <div className="mb-6 p-4 rounded-2xl bg-amber-400/10 dark:bg-amber-400/5 border-2 border-amber-400/40 text-indigo-950 dark:text-amber-200">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+            <Check size={18} className="stroke-[3]" />
+          </div>
+          <div className="text-xs leading-relaxed">
+            <p className="font-black uppercase tracking-wider text-slate-900 dark:text-amber-300 mb-0.5">
+              Guaranteed Alarm Playback
+            </p>
+            <p className="text-gray-700 dark:text-gray-300 font-medium">
+              When the scheduled time arrives, the app plays automatically. If your browser restricts background audio until touched, an instant <strong>"PLAY NOW ✅"</strong> prompt appears so you can play immediately with zero delay.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {showForm && (
         <div className="bg-indigo-100 dark:bg-slate-800 p-5 sm:p-6 max-border rounded-3xl max-shadow mb-6 space-y-4">
           <div className="flex items-center justify-between border-b-2 border-indigo-200 dark:border-slate-700 pb-3">

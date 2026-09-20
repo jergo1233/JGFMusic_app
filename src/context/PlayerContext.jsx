@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { playbackService } from '../services/playbackService';
+import { schedulerService } from '../services/schedulerService';
 import { useLibrary } from './LibraryContext';
 import { fileService } from '../services/fileService';
 import { storageService } from '../services/storageService';
@@ -22,6 +23,7 @@ export const PlayerProvider = ({ children }) => {
   const [shuffleMode, setShuffleMode] = useState(false);
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [scheduledAlarmPrompt, setScheduledAlarmPrompt] = useState(null);
 
   const triggeredRef = useRef(new Set());
   const stateRef = useRef({
@@ -65,12 +67,19 @@ export const PlayerProvider = ({ children }) => {
     }
   }, [songs, currentSong]);
 
-  const playScheduledItem = (sched) => {
+  const playScheduledItem = async (sched, isUserGesture = false) => {
     if (!sched?.targetId) return;
+
+    let targetTitle = sched.title || 'Scheduled Music';
+    let willPlaySong = null;
+    let willPlayQueue = null;
+
     if (sched.type === 'song') {
       const targetSong = songs.find(s => s.id === sched.targetId);
       if (targetSong) {
-        playSong(targetSong, songs);
+        willPlaySong = targetSong;
+        willPlayQueue = songs;
+        targetTitle = targetSong.title;
       }
     } else if (sched.type === 'playlist') {
       const pl = playlists.find(p => p.id === sched.targetId);
@@ -78,9 +87,38 @@ export const PlayerProvider = ({ children }) => {
         const plSongs = pl.songIds.map(id => songs.find(s => s.id === id)).filter(Boolean);
         if (plSongs.length > 0) {
           setCurrentPlaylist(plSongs);
-          playSong(plSongs[0], plSongs);
+          willPlaySong = plSongs[0];
+          willPlayQueue = plSongs;
+          targetTitle = pl.name;
         }
       }
+    }
+
+    if (!willPlaySong) return;
+
+    // If this is triggered directly by user gesture (confirm button or play test), play directly
+    if (isUserGesture) {
+      setScheduledAlarmPrompt(null);
+      await playSong(willPlaySong, willPlayQueue);
+      return;
+    }
+
+    // Try background/direct autoplay first
+    const playResult = await playSong(willPlaySong, willPlayQueue);
+    if (!playResult || !playResult.success) {
+      // Browser blocked autoplay due to user gesture policy!
+      // Provide immediate interactive confirmation prompt with ✅ button
+      setScheduledAlarmPrompt({
+        id: sched.id || 'sched_' + Date.now(),
+        targetId: sched.targetId,
+        type: sched.type || 'song',
+        title: targetTitle,
+        time: sched.time || 'Now',
+        song: willPlaySong,
+        queue: willPlayQueue
+      });
+    } else {
+      setScheduledAlarmPrompt(null);
     }
   };
 
@@ -101,7 +139,11 @@ export const PlayerProvider = ({ children }) => {
       const handleSwMessage = (e) => {
         if (e.data && e.data.type === 'AUTO_PLAY_SCHEDULED') {
           console.log("Service Worker triggered auto-play:", e.data);
-          playScheduledItem({ targetId: e.data.targetId, type: e.data.targetType });
+          playScheduledItem({
+            targetId: e.data.targetId,
+            type: e.data.targetType,
+            title: e.data.title
+          });
         }
       };
       navigator.serviceWorker.addEventListener('message', handleSwMessage);
@@ -133,15 +175,24 @@ export const PlayerProvider = ({ children }) => {
       const currentHours = String(now.getHours()).padStart(2, '0');
       const currentMins = String(now.getMinutes()).padStart(2, '0');
       const timeStr = `${currentHours}:${currentMins}`;
+      const nowTimestamp = now.getTime();
 
       schedules.forEach(sched => {
         if (!sched.enabled) return;
         const schedKey = `${sched.id}_${sched.date}_${sched.time}`;
         if (triggeredRef.current.has(schedKey)) return;
 
-        if (sched.date === todayStr && sched.time === timeStr) {
+        // Parse scheduled time
+        const schedDateTime = new Date(`${sched.date}T${sched.time}:00`);
+        const schedTimestamp = schedDateTime.getTime();
+
+        // Trigger if exact minute matches, or if current time just passed it within last 3 minutes (e.g. phone was locked or suspended)
+        const isTimeMatch = sched.date === todayStr && sched.time === timeStr;
+        const isRecentPast = !isNaN(schedTimestamp) && nowTimestamp >= schedTimestamp && (nowTimestamp - schedTimestamp) <= 3 * 60 * 1000;
+
+        if (isTimeMatch || isRecentPast) {
           triggeredRef.current.add(schedKey);
-          console.log("Triggering scheduled music:", sched.title);
+          console.log("Triggering scheduled music alarm:", sched.title);
           playScheduledItem(sched);
         }
       });
@@ -265,20 +316,30 @@ export const PlayerProvider = ({ children }) => {
     try {
       const url = await fileService.getFileUrl(song.fileUri);
       await playbackService.load(url, song);
-      playbackService.play();
-      setIsPlaying(true);
+      const playResult = await playbackService.play();
+      if (playResult && playResult.success) {
+        setIsPlaying(true);
+        return { success: true };
+      } else {
+        setIsPlaying(false);
+        return { success: false, error: playResult?.error };
+      }
     } catch (e) {
       console.error("Failed to play", e);
+      setIsPlaying(false);
+      return { success: false, error: e };
     }
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (isPlaying) {
       playbackService.pause();
       setIsPlaying(false);
     } else {
-      playbackService.play();
-      setIsPlaying(true);
+      const res = await playbackService.play();
+      if (res && res.success) {
+        setIsPlaying(true);
+      }
     }
   };
 
@@ -323,6 +384,18 @@ export const PlayerProvider = ({ children }) => {
     setIsPlaying(false);
   };
 
+  const confirmScheduledPlay = async () => {
+    if (scheduledAlarmPrompt) {
+      const prompt = scheduledAlarmPrompt;
+      setScheduledAlarmPrompt(null);
+      await playScheduledItem(prompt, true);
+    }
+  };
+
+  const dismissScheduledAlarmPrompt = () => {
+    setScheduledAlarmPrompt(null);
+  };
+
   return (
     <PlayerContext.Provider value={{
       currentSong, isPlaying, currentTime, duration,
@@ -330,7 +403,10 @@ export const PlayerProvider = ({ children }) => {
       repeatMode, shuffleMode, queue, currentIndex,
       playSong, togglePlay, handleNext, handlePrevious,
       seek, toggleRepeat, toggleShuffle, setCurrentPlaylist, closePlayer,
-      playScheduledItem
+      playScheduledItem,
+      scheduledAlarmPrompt,
+      confirmScheduledPlay,
+      dismissScheduledAlarmPrompt
     }}>
       {children}
     </PlayerContext.Provider>

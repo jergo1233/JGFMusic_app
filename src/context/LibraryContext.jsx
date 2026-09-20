@@ -20,50 +20,59 @@ export const LibraryProvider = ({ children }) => {
   }, []);
 
   const loadData = async () => {
-    let s = await storageService.get('songs', []);
-    // Remove any previously seeded starter songs
-    if (Array.isArray(s)) {
-      s = s.filter(song => !song.id?.startsWith('starter_'));
-      await storageService.set('songs', s);
-    } else {
-      s = [];
-      await storageService.set('songs', []);
+    try {
+      let s = await storageService.get('songs', []);
+      // Remove any previously seeded starter songs
+      if (Array.isArray(s)) {
+        s = s.filter(song => !song.id?.startsWith('starter_'));
+        await storageService.set('songs', s);
+      } else {
+        s = [];
+        await storageService.set('songs', []);
+      }
+
+      const p = await storageService.get('playlists', []);
+      const cleanPlaylists = (Array.isArray(p) ? p : [])
+        .filter(pl => pl.id !== 'pl_starter_1')
+        .map(pl => ({
+          ...pl,
+          songIds: (pl.songIds || []).filter(id => !id?.startsWith('starter_'))
+        }));
+      await storageService.set('playlists', cleanPlaylists);
+
+      const sched = await storageService.get('schedules', []);
+
+      let recent = await storageService.get('recentlyPlayed', []);
+      if (Array.isArray(recent)) {
+        recent = recent.filter(song => !song.id?.startsWith('starter_'));
+        await storageService.set('recentlyPlayed', recent);
+      } else {
+        recent = [];
+        await storageService.set('recentlyPlayed', []);
+      }
+
+      let history = await storageService.get('listeningHistory', []);
+      if (Array.isArray(history)) {
+        history = history.filter(item => !item.songId?.startsWith('starter_'));
+        await storageService.set('listeningHistory', history);
+      } else {
+        history = [];
+        await storageService.set('listeningHistory', []);
+      }
+
+      setSongs(s.sort((a, b) => (a?.title || '').localeCompare(b?.title || '')));
+      setPlaylists(cleanPlaylists);
+      setSchedules(Array.isArray(sched) ? sched : []);
+      setRecentlyPlayed(recent);
+      setListeningHistory(history);
+    } catch (err) {
+      console.error('Error loading library data:', err);
+      setSongs([]);
+      setPlaylists([]);
+      setSchedules([]);
+      setRecentlyPlayed([]);
+      setListeningHistory([]);
     }
-
-    const p = await storageService.get('playlists', []);
-    const cleanPlaylists = (Array.isArray(p) ? p : [])
-      .filter(pl => pl.id !== 'pl_starter_1')
-      .map(pl => ({
-        ...pl,
-        songIds: (pl.songIds || []).filter(id => !id?.startsWith('starter_'))
-      }));
-    await storageService.set('playlists', cleanPlaylists);
-
-    const sched = await storageService.get('schedules', []);
-
-    let recent = await storageService.get('recentlyPlayed', []);
-    if (Array.isArray(recent)) {
-      recent = recent.filter(song => !song.id?.startsWith('starter_'));
-      await storageService.set('recentlyPlayed', recent);
-    } else {
-      recent = [];
-      await storageService.set('recentlyPlayed', []);
-    }
-
-    let history = await storageService.get('listeningHistory', []);
-    if (Array.isArray(history)) {
-      history = history.filter(item => !item.songId?.startsWith('starter_'));
-      await storageService.set('listeningHistory', history);
-    } else {
-      history = [];
-      await storageService.set('listeningHistory', []);
-    }
-
-    setSongs(s.sort((a, b) => a.title.localeCompare(b.title)));
-    setPlaylists(cleanPlaylists);
-    setSchedules(sched);
-    setRecentlyPlayed(recent);
-    setListeningHistory(history);
   };
 
   const addToRecentlyPlayed = async (song) => {

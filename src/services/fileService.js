@@ -40,14 +40,19 @@ export const fileService = {
 
   async getFileUrl(fileUri) {
     if (!fileUri) return null;
-    if (fileUri.startsWith('idb://')) {
-      const key = fileUri.replace('idb://', '');
-      const blob = await get(key);
-      if (blob) {
-        return URL.createObjectURL(blob);
+    try {
+      if (fileUri.startsWith('idb://')) {
+        const key = fileUri.replace('idb://', '');
+        const blob = await get(key);
+        if (blob) {
+          return URL.createObjectURL(blob);
+        }
       }
+      return fileUri;
+    } catch (e) {
+      console.warn("Failed to get file URL:", e);
+      return null;
     }
-    return fileUri;
   },
 
   async deleteFile(fileUri) {
