@@ -10,7 +10,7 @@ const PlayerContext = createContext();
 export const usePlayer = () => useContext(PlayerContext);
 
 export const PlayerProvider = ({ children }) => {
-  const { songs, playlists, schedules, addToRecentlyPlayed, addToHistory } = useLibrary();
+  const { songs, playlists, schedules, saveSchedules, addToRecentlyPlayed, addToHistory } = useLibrary();
 
   const [currentSong, setCurrentSong] = useState(null);
   const [currentPlaylist, setCurrentPlaylist] = useState(null); // array of songs or null for library
@@ -69,6 +69,10 @@ export const PlayerProvider = ({ children }) => {
 
   const playScheduledItem = async (sched, isUserGesture = false) => {
     if (!sched?.targetId) return;
+
+    // Wake lock & audio context priming for background & lockscreen playback
+    schedulerService.primeAudioKeepAlive();
+    schedulerService.requestWakeLock();
 
     let targetTitle = sched.title || 'Scheduled Music';
     let willPlaySong = null;
@@ -177,25 +181,83 @@ export const PlayerProvider = ({ children }) => {
       const timeStr = `${currentHours}:${currentMins}`;
       const nowTimestamp = now.getTime();
 
-      schedules.forEach(sched => {
+      const dayOfWeek = now.getDay();
+      const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+      let schedulesUpdated = false;
+      const updatedSchedules = [...schedules];
+
+      schedules.forEach((sched, idx) => {
         if (!sched.enabled) return;
-        const schedKey = `${sched.id}_${sched.date}_${sched.time}`;
-        if (triggeredRef.current.has(schedKey)) return;
 
-        // Parse scheduled time
-        const schedDateTime = new Date(`${sched.date}T${sched.time}:00`);
-        const schedTimestamp = schedDateTime.getTime();
+        let shouldTrigger = false;
+        const schedKey = `${sched.id}_${todayStr}_${sched.time}`;
 
-        // Trigger if exact minute matches, or if current time just passed it within last 3 minutes (e.g. phone was locked or suspended)
-        const isTimeMatch = sched.date === todayStr && sched.time === timeStr;
-        const isRecentPast = !isNaN(schedTimestamp) && nowTimestamp >= schedTimestamp && (nowTimestamp - schedTimestamp) <= 3 * 60 * 1000;
+        if (sched.repeat === 'daily') {
+          if (!triggeredRef.current.has(schedKey) && sched.time === timeStr) {
+            shouldTrigger = true;
+            triggeredRef.current.add(schedKey);
+          }
+        } else if (sched.repeat === 'weekdays') {
+          if (isWeekday && !triggeredRef.current.has(schedKey) && sched.time === timeStr) {
+            shouldTrigger = true;
+            triggeredRef.current.add(schedKey);
+          }
+        } else {
+          // Once / Specific date
+          if (!triggeredRef.current.has(schedKey)) {
+            const isDateMatch = sched.date === todayStr;
+            const schedDateTime = new Date(`${sched.date}T${sched.time}:00`);
+            const schedTimestamp = schedDateTime.getTime();
+            const isRecentPast = !isNaN(schedTimestamp) && nowTimestamp >= schedTimestamp && (nowTimestamp - schedTimestamp) <= 3 * 60 * 1000;
 
-        if (isTimeMatch || isRecentPast) {
-          triggeredRef.current.add(schedKey);
+            if ((isDateMatch && sched.time === timeStr) || isRecentPast) {
+              shouldTrigger = true;
+              triggeredRef.current.add(schedKey);
+            }
+          }
+        }
+
+        if (shouldTrigger) {
           console.log("Triggering scheduled music alarm:", sched.title);
           playScheduledItem(sched);
+
+          // Handle reusable schedule persistence
+          if (sched.repeat === 'once' || !sched.repeat) {
+            if (sched.autoRenew) {
+              // Automatically re-arm for tomorrow at same time
+              const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+              const nextDateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+              updatedSchedules[idx] = {
+                ...sched,
+                date: nextDateStr,
+                enabled: true,
+                lastTriggered: nowTimestamp
+              };
+              schedulesUpdated = true;
+            } else {
+              // Keep schedule in list so user can tap REUSE anytime
+              updatedSchedules[idx] = {
+                ...sched,
+                enabled: false,
+                status: 'completed',
+                lastTriggered: nowTimestamp
+              };
+              schedulesUpdated = true;
+            }
+          } else {
+            // Daily / Weekdays: update lastTriggered timestamp
+            updatedSchedules[idx] = {
+              ...sched,
+              lastTriggered: nowTimestamp
+            };
+            schedulesUpdated = true;
+          }
         }
       });
+
+      if (schedulesUpdated && saveSchedules) {
+        saveSchedules(updatedSchedules);
+      }
     };
 
     let worker = null;

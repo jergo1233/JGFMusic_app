@@ -126,8 +126,124 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Helper to compute next trigger time in Service Worker
+function getSWNextTrigger(sched, now = Date.now()) {
+  if (sched.nextTriggerTimestamp && sched.nextTriggerTimestamp > now) {
+    return sched.nextTriggerTimestamp;
+  }
+  const nowDate = new Date(now);
+  const [h, m] = (sched.time || '00:00').split(':').map(Number);
+
+  if (sched.repeat === 'daily') {
+    let target = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), h, m, 0, 0);
+    if (target.getTime() <= now) {
+      target.setDate(target.getDate() + 1);
+    }
+    return target.getTime();
+  }
+
+  if (sched.repeat === 'weekdays') {
+    let target = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), h, m, 0, 0);
+    if (target.getTime() <= now) {
+      target.setDate(target.getDate() + 1);
+    }
+    while (target.getDay() === 0 || target.getDay() === 6) {
+      target.setDate(target.getDate() + 1);
+    }
+    return target.getTime();
+  }
+
+  // Once or default:
+  if (sched.date) {
+    const parts = sched.date.split('-').map(Number);
+    let target = new Date(parts[0], parts[1] - 1, parts[2], h, m, 0, 0);
+    if (target.getTime() <= now && (sched.autoRenew || sched.reusable)) {
+      let nextTarget = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), h, m, 0, 0);
+      if (nextTarget.getTime() <= now) {
+        nextTarget.setDate(nextTarget.getDate() + 1);
+      }
+      return nextTarget.getTime();
+    }
+    return target.getTime();
+  }
+
+  let defaultTarget = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), h, m, 0, 0);
+  if (defaultTarget.getTime() <= now) {
+    defaultTarget.setDate(defaultTarget.getDate() + 1);
+  }
+  return defaultTarget.getTime();
+}
+
 // Background Schedule Timers map
 let activeScheduleTimers = new Map();
+
+function scheduleSWTimer(sched) {
+  if (!sched || !sched.enabled) return;
+
+  const now = Date.now();
+  const targetTime = getSWNextTrigger(sched, now);
+  const delay = targetTime - now;
+
+  // Clear existing timer if any
+  if (activeScheduleTimers.has(sched.id)) {
+    clearTimeout(activeScheduleTimers.get(sched.id));
+    activeScheduleTimers.delete(sched.id);
+  }
+
+  // Schedule within next 48 hours
+  if (delay > 0 && delay < 48 * 60 * 60 * 1000) {
+    const timerId = setTimeout(async () => {
+      try {
+        // Attempt to notify active clients to play immediately
+        const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        let clientNotified = false;
+        for (const client of clientsList) {
+          client.postMessage({
+            type: 'AUTO_PLAY_SCHEDULED',
+            targetId: sched.targetId,
+            targetType: sched.type,
+            title: sched.title,
+            repeat: sched.repeat,
+            scheduleId: sched.id
+          });
+          clientNotified = true;
+        }
+
+        // Show loud interactive alarm notification on Lock Screen
+        await self.registration.showNotification(`⏰ ALARM: ${sched.title}`, {
+          body: `Scheduled music is playing! ${clientNotified ? 'Now playing in background.' : 'Tap to start playback.'}`,
+          icon: '/icon.svg',
+          badge: '/icon.svg',
+          tag: `sched_alarm_${sched.id}`,
+          renotify: true,
+          requireInteraction: true,
+          vibrate: [500, 200, 500, 200, 800, 300, 1000],
+          actions: [
+            { action: 'play', title: '▶ PLAY NOW ✅' },
+            { action: 'dismiss', title: '✖ DISMISS' }
+          ],
+          data: {
+            targetId: sched.targetId,
+            type: sched.type,
+            title: sched.title,
+            repeat: sched.repeat,
+            scheduleId: sched.id,
+            url: `/?playSchedule=${sched.targetId}&type=${sched.type}&alarm=true`
+          }
+        });
+
+        // If this schedule is recurring (Daily or Weekdays), automatically re-arm for next occurrence!
+        if (sched.repeat === 'daily' || sched.repeat === 'weekdays' || sched.autoRenew) {
+          scheduleSWTimer(sched);
+        }
+      } catch (err) {
+        console.error('Failed to trigger SW alarm notification:', err);
+      }
+    }, delay);
+
+    activeScheduleTimers.set(sched.id, timerId);
+  }
+}
 
 // Listen for message events (e.g. manual skipWaiting, CLEAR_CACHE, or SYNC_SCHEDULES)
 self.addEventListener('message', async (event) => {
@@ -157,57 +273,8 @@ self.addEventListener('message', async (event) => {
     }
     activeScheduleTimers.clear();
 
-    const now = Date.now();
     schedules.forEach(sched => {
-      if (!sched.enabled) return;
-      const targetTime = new Date(`${sched.date}T${sched.time}:00`).getTime();
-      const delay = targetTime - now;
-
-      // If scheduled within next 24 hours
-      if (delay > 0 && delay < 24 * 60 * 60 * 1000) {
-        const timerId = setTimeout(async () => {
-          try {
-            // First attempt to notify existing clients to auto-play if app is open/minimized
-            const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-            let clientNotified = false;
-            for (const client of clientsList) {
-              client.postMessage({
-                type: 'AUTO_PLAY_SCHEDULED',
-                targetId: sched.targetId,
-                targetType: sched.type,
-                title: sched.title
-              });
-              clientNotified = true;
-            }
-
-            // Always show high-priority system alarm notification with audio chime & action buttons
-            // This ensures it rings and wakes the phone even when closed or standing
-            await self.registration.showNotification(`⏰ ALARM: ${sched.title}`, {
-              body: `Scheduled music time! ${clientNotified ? 'Now playing!' : 'Tap to start playback.'}`,
-              icon: '/icon.svg',
-              badge: '/icon.svg',
-              tag: `sched_alarm_${sched.id}`,
-              renotify: true,
-              requireInteraction: true,
-              vibrate: [300, 100, 300, 100, 400],
-              actions: [
-                { action: 'play', title: '▶ PLAY NOW ✅' },
-                { action: 'dismiss', title: '✖ DISMISS' }
-              ],
-              data: {
-                targetId: sched.targetId,
-                type: sched.type,
-                title: sched.title,
-                url: `/?playSchedule=${sched.targetId}&type=${sched.type}`
-              }
-            });
-          } catch (err) {
-            console.error('Failed to trigger SW alarm notification:', err);
-          }
-        }, delay);
-
-        activeScheduleTimers.set(sched.id, timerId);
-      }
+      scheduleSWTimer(sched);
     });
   }
 });
