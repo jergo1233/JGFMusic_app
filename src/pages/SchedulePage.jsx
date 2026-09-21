@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLibrary } from '../context/LibraryContext';
 import { usePlayer } from '../context/PlayerContext';
 import { schedulerService } from '../services/schedulerService';
-import { Trash2, Plus, Clock, Calendar, Music, ListMusic, Check, AlertCircle, Play, RotateCcw, Repeat, ShieldCheck, Zap } from 'lucide-react';
+import { Trash2, Plus, Clock, Calendar, Music, ListMusic, Check, AlertCircle, Play, RotateCcw, Repeat, Edit2 } from 'lucide-react';
 import { generateId } from '../utils/format';
 import { useLocation } from 'react-router-dom';
 
@@ -12,6 +12,7 @@ const SchedulePage = () => {
   const location = useLocation();
 
   const [showForm, setShowForm] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
   const [targetId, setTargetId] = useState('');
   const [type, setType] = useState('song');
   const [date, setDate] = useState('');
@@ -38,6 +39,7 @@ const SchedulePage = () => {
   };
 
   const openScheduleForm = () => {
+    setEditingScheduleId(null);
     setDate(getTodayStr());
     setTime(getTimeWithOffset(5));
     setRepeat('daily');
@@ -49,6 +51,19 @@ const SchedulePage = () => {
       else if (type === 'playlist' && playlists.length > 0) setTargetId(playlists[0].id);
     }
     setShowForm(true);
+  };
+
+  const handleEditSchedule = (sched) => {
+    setEditingScheduleId(sched.id);
+    setType(sched.type || 'song');
+    setTargetId(sched.targetId);
+    setDate(sched.date || getTodayStr());
+    setTime(sched.time || getTimeWithOffset(5));
+    setRepeat(sched.repeat || 'daily');
+    setAutoRenew(sched.autoRenew !== false);
+    setErrorMessage('');
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -91,7 +106,7 @@ const SchedulePage = () => {
         resolvedTargetId = playlists[0].id;
         setTargetId(playlists[0].id);
       } else {
-        setErrorMessage(`Pumili muna ng ${type === 'song' ? 'kanta' : 'playlist'}.`);
+        setErrorMessage(`Please select a ${type === 'song' ? 'song' : 'playlist'} first.`);
         return;
       }
     }
@@ -117,31 +132,60 @@ const SchedulePage = () => {
         title = found?.name || 'Scheduled Playlist';
       }
 
-      const newSched = {
-        id: generateId(),
-        targetId: resolvedTargetId,
-        type,
-        title,
-        date: finalDate,
-        time: finalTime,
-        repeat, // 'daily', 'weekdays', 'once'
-        autoRenew, // Reusable: kusa ulit tutugtog sa susunod na araw
-        reusable: true, // Permanent reusable entry
-        enabled: true,
-        createdAt: Date.now()
-      };
+      let updated = [];
+      let savedSched = null;
 
-      const updated = [newSched, ...schedules];
-      await schedulerService.schedulePlayback(newSched, updated);
+      if (editingScheduleId) {
+        const existing = schedules.find(s => s.id === editingScheduleId);
+        savedSched = {
+          ...existing,
+          id: editingScheduleId,
+          targetId: resolvedTargetId,
+          type,
+          title,
+          date: finalDate,
+          time: finalTime,
+          repeat, // 'daily', 'weekdays', 'once'
+          autoRenew, // Reusable: automatically re-arms for next day
+          reusable: true,
+          enabled: true,
+          status: 'active',
+          updatedAt: Date.now()
+        };
+        updated = schedules.map(s => (s.id === editingScheduleId ? savedSched : s));
+      } else {
+        savedSched = {
+          id: generateId(),
+          targetId: resolvedTargetId,
+          type,
+          title,
+          date: finalDate,
+          time: finalTime,
+          repeat, // 'daily', 'weekdays', 'once'
+          autoRenew, // Reusable: automatically re-arms for next day
+          reusable: true, // Permanent reusable entry
+          enabled: true,
+          status: 'active',
+          createdAt: Date.now()
+        };
+        updated = [savedSched, ...schedules];
+      }
+
+      await schedulerService.schedulePlayback(savedSched, updated);
       await saveSchedules(updated);
 
       setShowForm(false);
-      const repeatLabel = repeat === 'daily' ? 'Araw-araw (Daily)' : repeat === 'weekdays' ? 'Lunes-Biyernes (Weekdays)' : 'Isang beses (Reusable)';
-      setSuccessMessage(`Nai-save! "${title}" naka-schedule tuwing ${finalTime} (${repeatLabel}). Reusable at mag-a-auto-play kahit sarado ang screen o offline!`);
+      setEditingScheduleId(null);
+      const repeatLabel = repeat === 'daily' ? 'Daily (Every day)' : repeat === 'weekdays' ? 'Weekdays (Mon - Fri)' : 'Once (Reusable)';
+      if (editingScheduleId) {
+        setSuccessMessage(`Schedule updated! "${title}" time set to ${finalTime} (${repeatLabel}). Reusable alarm is active!`);
+      } else {
+        setSuccessMessage(`Schedule saved! "${title}" set for ${finalTime} (${repeatLabel}). Reusable alarm is active!`);
+      }
       setTimeout(() => setSuccessMessage(''), 7000);
     } catch (e) {
       console.error('Failed to schedule:', e);
-      setErrorMessage('Hindi nai-save ang schedule.');
+      setErrorMessage('Failed to save schedule. Please check your time settings.');
     } finally {
       setIsSaving(false);
     }
@@ -164,7 +208,7 @@ const SchedulePage = () => {
     await saveSchedules(updated);
     await schedulerService.syncWithServiceWorker(updated);
     schedulerService.primeAudioKeepAlive();
-    setSuccessMessage(`Nai-rearm si "${sched.title}" para sa ${sched.time} (${nextDate})! Reusable ito.`);
+    setSuccessMessage(`Re-armed "${sched.title}" for ${sched.time} (${nextDate})! Reusable schedule is active.`);
     setTimeout(() => setSuccessMessage(''), 5000);
   };
 
@@ -184,6 +228,10 @@ const SchedulePage = () => {
   };
 
   const deleteSchedule = async (id) => {
+    if (editingScheduleId === id) {
+      setEditingScheduleId(null);
+      setShowForm(false);
+    }
     const updated = schedules.filter(s => s.id !== id);
     await saveSchedules(updated);
     await schedulerService.cancelSchedule(id, updated);
@@ -192,7 +240,7 @@ const SchedulePage = () => {
   const handleTestPlay = (sched) => {
     if (playScheduledItem) {
       playScheduledItem(sched, true);
-      setSuccessMessage(`Sinusubukan ang musika: "${sched.title}"!`);
+      setSuccessMessage(`Testing playback: "${sched.title}"!`);
       setTimeout(() => setSuccessMessage(''), 3500);
     }
   };
@@ -221,7 +269,7 @@ const SchedulePage = () => {
             className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-xl max-border shadow-sm cursor-pointer active:scale-95"
           >
             <Plus size={16} className="stroke-[3]" />
-            <span>BAGONG SCHEDULE</span>
+            <span>NEW SCHEDULE</span>
           </button>
         )}
       </div>
@@ -233,33 +281,30 @@ const SchedulePage = () => {
         </div>
       )}
 
-      {/* Auto-Play, Background & Offline Assurance Banner */}
-      <div className="mb-6 p-4.5 rounded-2xl bg-gradient-to-r from-amber-400/15 to-indigo-500/10 dark:from-amber-400/10 dark:to-indigo-500/10 border-2 border-amber-400/40 text-indigo-950 dark:text-amber-100 shadow-sm">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
-            <Zap size={18} className="stroke-[3]" />
-          </div>
-          <div className="text-xs leading-relaxed space-y-1">
-            <p className="font-black uppercase tracking-wider text-slate-900 dark:text-amber-300">
-              Reusable • Close Screen • 100% Offline Alarm
-            </p>
-            <p className="text-gray-700 dark:text-gray-300 font-medium">
-              • <strong>Reusable Songs:</strong> Hindi mawawala ang iyong mga naka-schedule na kanta. Pwede mong pindutin ang <strong>REUSE 🔄</strong> anumang oras o itakda bilang <strong>Araw-araw (Daily)</strong>.<br />
-              • <strong>Kahit sarado ang screen:</strong> Gamit ang background audio keepalive at WakeLock, tutunog at mag-play ang musika kahit naka-lock ang cellphone.<br />
-              • <strong>Offline Ready:</strong> Nakatago ang mga kanta sa IndexedDB at Service Worker cache kaya tutunog pa rin kahit walang Wi-Fi o data!
-            </p>
-          </div>
-        </div>
-      </div>
-
       {showForm && (
         <div className="bg-indigo-100 dark:bg-slate-800 p-5 sm:p-6 max-border rounded-3xl max-shadow mb-6 space-y-4">
           <div className="flex items-center justify-between border-b-2 border-indigo-200 dark:border-slate-700 pb-3">
             <h3 className="font-black text-xl uppercase tracking-tight text-indigo-950 dark:text-white flex items-center gap-2">
-              <Clock size={20} className="text-indigo-600 dark:text-indigo-400" />
-              <span>MAG-SCHEDULE NG KANTA</span>
+              {editingScheduleId ? (
+                <>
+                  <Edit2 size={20} className="text-amber-500" />
+                  <span>EDIT SCHEDULE / CHANGE TIME</span>
+                </>
+              ) : (
+                <>
+                  <Clock size={20} className="text-indigo-600 dark:text-indigo-400" />
+                  <span>SCHEDULE MUSIC</span>
+                </>
+              )}
             </h3>
           </div>
+
+          {editingScheduleId && (
+            <div className="p-3 bg-amber-400/20 border border-amber-500/40 rounded-xl text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+              <Edit2 size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Editing existing reusable schedule. You can modify the time set, date, target track, or repeat frequency below.</span>
+            </div>
+          )}
 
           <div className="flex bg-indigo-200/70 dark:bg-slate-900 p-1.5 rounded-2xl max-border">
             <button
@@ -270,7 +315,7 @@ const SchedulePage = () => {
               }`}
             >
               <Music size={16} />
-              <span>KANTA</span>
+              <span>SONG</span>
             </button>
             <button
               type="button"
@@ -286,7 +331,7 @@ const SchedulePage = () => {
 
           <div>
             <label className="block text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-amber-300 mb-1.5">
-              PUMILI NG {type === 'song' ? 'KANTA' : 'PLAYLIST'}
+              SELECT {type === 'song' ? 'SONG' : 'PLAYLIST'}
             </label>
             <select
               value={targetId}
@@ -296,7 +341,7 @@ const SchedulePage = () => {
               }}
               className="w-full bg-white dark:bg-slate-900 text-slate-950 dark:text-white p-3.5 max-border rounded-xl outline-none font-bold text-sm uppercase cursor-pointer"
             >
-              <option value="">-- PUMILI NG {type.toUpperCase()} --</option>
+              <option value="">-- SELECT {type.toUpperCase()} --</option>
               {type === 'song' ? (
                 songs.map(s => <option key={s.id} value={s.id}>{s.title} - {s.artist}</option>)
               ) : (
@@ -309,7 +354,7 @@ const SchedulePage = () => {
           <div>
             <label className="block text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-amber-300 mb-1.5 flex items-center gap-1.5">
               <Repeat size={14} className="text-indigo-600 dark:text-amber-400" />
-              <span>REUSABLE REPEAT MODE (DALAS NG PAGTUGTOG)</span>
+              <span>REUSABLE REPEAT MODE (FREQUENCY)</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -321,8 +366,8 @@ const SchedulePage = () => {
                     : 'bg-white dark:bg-slate-900 text-indigo-950 dark:text-slate-200'
                 }`}
               >
-                <span>🔄 ARAW-ARAW</span>
-                <span className="text-[9px] opacity-80">(Daily)</span>
+                <span>🔄 DAILY</span>
+                <span className="text-[9px] opacity-80">(Every day)</span>
               </button>
               <button
                 type="button"
@@ -345,7 +390,7 @@ const SchedulePage = () => {
                     : 'bg-white dark:bg-slate-900 text-indigo-950 dark:text-slate-200'
                 }`}
               >
-                <span>⏰ ISANG BESES</span>
+                <span>⏰ ONCE</span>
                 <span className="text-[9px] opacity-80">(Reusable)</span>
               </button>
             </div>
@@ -355,7 +400,7 @@ const SchedulePage = () => {
             <div>
               <label className="block text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-amber-300 mb-1 flex items-center gap-1">
                 <Calendar size={14} className="text-indigo-600 dark:text-amber-400" />
-                <span>PETSA (DATE)</span>
+                <span>DATE</span>
               </label>
               <input
                 type="date"
@@ -368,26 +413,26 @@ const SchedulePage = () => {
             <div>
               <label className="block text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-amber-300 mb-1 flex items-center gap-1">
                 <Clock size={14} className="text-indigo-600 dark:text-amber-400" />
-                <span>ORAS (TIME)</span>
+                <span>TIME (SET PLAYBACK TIME)</span>
               </label>
               <input
                 type="time"
                 value={time}
                 onChange={e => setTime(e.target.value)}
-                className="w-full bg-white dark:bg-slate-900 text-slate-950 dark:text-white p-3 max-border rounded-xl font-bold text-sm uppercase"
+                className="w-full bg-white dark:bg-slate-900 text-slate-950 dark:text-white p-3 max-border rounded-xl font-bold text-sm uppercase font-mono"
               />
             </div>
           </div>
 
           {/* Quick Shortcuts */}
           <div className="flex flex-wrap gap-2 pt-1 items-center">
-            <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-amber-300">Preset:</span>
+            <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-amber-300">Quick Presets:</span>
             {[5, 15, 30, 60].map(mins => (
               <button
                 key={mins}
                 type="button"
                 onClick={() => handleApplyPreset(mins)}
-                className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-black text-[10px] uppercase border border-indigo-300 dark:border-slate-600 shadow-sm cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-black text-[10px] uppercase border border-indigo-300 dark:border-slate-600 shadow-sm cursor-pointer hover:bg-indigo-50"
               >
                 +{mins}m
               </button>
@@ -400,10 +445,10 @@ const SchedulePage = () => {
               <RotateCcw size={16} className="text-indigo-600 dark:text-amber-400" />
               <div>
                 <p className="text-xs font-black uppercase text-indigo-950 dark:text-white">
-                  Awtomatikong Ulitin (Auto-Renew)
+                  Automatic Repeat (Auto-Renew)
                 </p>
                 <p className="text-[10px] text-gray-600 dark:text-gray-400">
-                  Mananatiling reusable at muling mag-a-alarm bukas
+                  Keep schedule reusable and automatically re-arm for next day
                 </p>
               </div>
             </div>
@@ -430,14 +475,17 @@ const SchedulePage = () => {
               className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base uppercase rounded-xl max-border shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
               <Check size={20} className="stroke-[3]" />
-              <span>{isSaving ? 'ISINASAVE...' : 'I-SAVE ANG SCHEDULE'}</span>
+              <span>{isSaving ? 'SAVING...' : editingScheduleId ? 'UPDATE SCHEDULE TIME' : 'SAVE SCHEDULE'}</span>
             </button>
             <button
               type="button"
-              onClick={() => setShowForm(false)}
+              onClick={() => {
+                setShowForm(false);
+                setEditingScheduleId(null);
+              }}
               className="px-5 py-3.5 bg-slate-200 dark:bg-slate-700 text-slate-950 dark:text-white font-black text-base uppercase rounded-xl max-border cursor-pointer hover:bg-slate-300"
             >
-              KANSELAHIN
+              CANCEL
             </button>
           </div>
         </div>
@@ -469,7 +517,7 @@ const SchedulePage = () => {
                     {/* Recurrence & Reusable Badges */}
                     {isDaily && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40">
-                        🔄 Araw-araw (Daily)
+                        🔄 Daily
                       </span>
                     )}
                     {isWeekdays && (
@@ -483,12 +531,19 @@ const SchedulePage = () => {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-400 flex-wrap">
                     <span>{sched.date}</span>
                     <span>•</span>
-                    <span className="font-mono text-indigo-600 dark:text-amber-400 font-black text-sm">
-                      {sched.time}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleEditSchedule(sched)}
+                      className="flex items-center gap-1 font-mono text-indigo-600 hover:text-indigo-800 dark:text-amber-400 dark:hover:text-amber-300 font-black text-sm bg-indigo-100/80 hover:bg-indigo-200 dark:bg-slate-700/80 dark:hover:bg-slate-700 px-2 py-0.5 rounded-lg transition-colors cursor-pointer border border-indigo-200 dark:border-slate-600"
+                      title="Click to edit time set"
+                    >
+                      <Clock size={12} />
+                      <span>{sched.time}</span>
+                      <Edit2 size={11} className="ml-0.5 text-amber-600 dark:text-amber-400" />
+                    </button>
                     <span>•</span>
                     <span className={sched.enabled ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-gray-500'}>
                       {sched.enabled ? 'ARMED / ACTIVE' : 'STANDBY'}
@@ -497,14 +552,25 @@ const SchedulePage = () => {
                 </div>
               </div>
 
-              {/* Action Buttons: 1-Tap REUSE, Play Test, Toggle, Delete */}
+              {/* Action Buttons: EDIT TIME, 1-Tap REUSE, Play Test, Toggle, Delete */}
               <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-end">
-                {/* 1-Tap REUSE / ULITIN Button */}
+                {/* EDIT TIME BUTTON */}
+                <button
+                  type="button"
+                  onClick={() => handleEditSchedule(sched)}
+                  className="px-3 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 text-[11px] font-black uppercase rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all max-border"
+                  title="Edit time set or schedule settings"
+                >
+                  <Edit2 size={13} className="stroke-[2.5]" />
+                  <span>EDIT</span>
+                </button>
+
+                {/* 1-Tap REUSE Button */}
                 <button
                   type="button"
                   onClick={() => handleReuseSchedule(sched)}
-                  className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
-                  title="Ulitin / Re-arm Schedule para sa susunod na oras"
+                  className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all max-border"
+                  title="Re-arm schedule for next occurrence"
                 >
                   <RotateCcw size={13} className="stroke-[2.5]" />
                   <span>REUSE</span>
@@ -513,8 +579,8 @@ const SchedulePage = () => {
                 <button
                   type="button"
                   onClick={() => handleTestPlay(sched)}
-                  className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase rounded-xl flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
-                  title="Pakinggan agad"
+                  className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase rounded-xl flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm max-border"
+                  title="Test playback now"
                 >
                   <Play size={12} fill="currentColor" />
                   <span>PLAY</span>
@@ -523,8 +589,8 @@ const SchedulePage = () => {
                 <button
                   type="button"
                   onClick={() => toggleScheduleEnabled(sched.id)}
-                  className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase cursor-pointer transition-all shadow-sm ${
-                    sched.enabled ? 'bg-indigo-950 dark:bg-indigo-500 text-white' : 'bg-amber-400 text-slate-950 font-black'
+                  className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase cursor-pointer transition-all shadow-sm max-border ${
+                    sched.enabled ? 'bg-indigo-950 dark:bg-indigo-500 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
                   }`}
                 >
                   {sched.enabled ? 'ON' : 'OFF'}
@@ -534,7 +600,7 @@ const SchedulePage = () => {
                   type="button"
                   onClick={() => deleteSchedule(sched.id)}
                   className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl cursor-pointer transition-colors"
-                  title="Tanggalin sa listahan"
+                  title="Delete schedule"
                 >
                   <Trash2 size={16} />
                 </button>
@@ -547,10 +613,10 @@ const SchedulePage = () => {
           <div className="text-center py-16 px-4 bg-indigo-50/50 dark:bg-slate-800/40 max-border rounded-3xl">
             <Clock size={48} className="mx-auto text-indigo-700 dark:text-indigo-300 mb-3 stroke-[2]" />
             <p className="font-black text-2xl text-indigo-950 dark:text-white uppercase tracking-widest">
-              WALANG SCHEDULE!
+              NO SCHEDULES SET!
             </p>
             <p className="text-xs font-black text-indigo-700 dark:text-amber-300 uppercase mt-1">
-              Magtakda ng mga reusable timer para awtomatikong tumugtog ang musika.
+              Set reusable timers to automatically play music at your chosen time.
             </p>
           </div>
         )}

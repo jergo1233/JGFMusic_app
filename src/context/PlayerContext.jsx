@@ -298,7 +298,6 @@ export const PlayerProvider = ({ children }) => {
     const currentQ = (stateRef.current.queue && stateRef.current.queue.length > 0) 
       ? stateRef.current.queue 
       : stateRef.current.songs;
-    const curIdx = stateRef.current.currentIndex;
     const rMode = stateRef.current.repeatMode;
 
     if (rMode === 'song') {
@@ -309,12 +308,18 @@ export const PlayerProvider = ({ children }) => {
     }
 
     if (currentQ && currentQ.length > 0) {
+      let curIdx = stateRef.current.currentIndex;
+      if ((curIdx < 0 || curIdx >= currentQ.length) && stateRef.current.currentSong) {
+        const matchIdx = currentQ.findIndex(s => s.id === stateRef.current.currentSong.id);
+        if (matchIdx >= 0) curIdx = matchIdx;
+      }
+      if (curIdx < 0) curIdx = 0;
       let nextIdx = curIdx + 1;
       if (nextIdx >= currentQ.length) {
         nextIdx = 0; // Seamless loop back to top of queue
       }
-      playSong(currentQ[nextIdx], currentQ);
-      setCurrentIndex(nextIdx);
+      // Play next song in the established queue order without re-shuffling or resetting
+      playSong(currentQ[nextIdx], null);
     }
   };
 
@@ -326,15 +331,19 @@ export const PlayerProvider = ({ children }) => {
     const currentQ = (stateRef.current.queue && stateRef.current.queue.length > 0) 
       ? stateRef.current.queue 
       : stateRef.current.songs;
-    const curIdx = stateRef.current.currentIndex;
 
     if (currentQ && currentQ.length > 0) {
+      let curIdx = stateRef.current.currentIndex;
+      if ((curIdx < 0 || curIdx >= currentQ.length) && stateRef.current.currentSong) {
+        const matchIdx = currentQ.findIndex(s => s.id === stateRef.current.currentSong.id);
+        if (matchIdx >= 0) curIdx = matchIdx;
+      }
+      if (curIdx < 0) curIdx = 0;
       let prevIdx = curIdx - 1;
       if (prevIdx < 0) {
         prevIdx = currentQ.length - 1;
       }
-      playSong(currentQ[prevIdx], currentQ);
-      setCurrentIndex(prevIdx);
+      playSong(currentQ[prevIdx], null);
     }
   };
 
@@ -345,6 +354,19 @@ export const PlayerProvider = ({ children }) => {
     playbackService.onNext = handleNext;
     playbackService.onPrevious = handlePrevious;
   }, []);
+
+  const updateQueue = (newQueue) => {
+    if (!newQueue || !Array.isArray(newQueue) || newQueue.length === 0) return;
+    setQueue(newQueue);
+    stateRef.current.queue = newQueue;
+    const activeSong = stateRef.current.currentSong || currentSong;
+    if (activeSong) {
+      const idx = newQueue.findIndex(s => s.id === activeSong.id);
+      const newIdx = idx >= 0 ? idx : 0;
+      setCurrentIndex(newIdx);
+      stateRef.current.currentIndex = newIdx;
+    }
+  };
 
   const playSong = async (song, sourceQueue = null) => {
     if (!song) return;
@@ -363,8 +385,14 @@ export const PlayerProvider = ({ children }) => {
 
     setQueue(activeQueue);
     const foundIdx = activeQueue.findIndex(s => s.id === song.id);
-    setCurrentIndex(foundIdx >= 0 ? foundIdx : 0);
+    const resolvedIndex = foundIdx >= 0 ? foundIdx : 0;
+    setCurrentIndex(resolvedIndex);
     setCurrentSong(song);
+
+    // Keep stateRef immediately fresh for any incoming next callbacks
+    stateRef.current.queue = activeQueue;
+    stateRef.current.currentIndex = resolvedIndex;
+    stateRef.current.currentSong = song;
 
     // Automatically remember recently played song
     if (addToRecentlyPlayed) {
@@ -463,6 +491,7 @@ export const PlayerProvider = ({ children }) => {
       currentSong, isPlaying, currentTime, duration,
       volume, isMuted, changeVolume, toggleMute,
       repeatMode, shuffleMode, queue, currentIndex,
+      updateQueue,
       playSong, togglePlay, handleNext, handlePrevious,
       seek, toggleRepeat, toggleShuffle, setCurrentPlaylist, closePlayer,
       playScheduledItem,

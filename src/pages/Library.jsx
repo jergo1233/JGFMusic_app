@@ -3,7 +3,7 @@ import { useLibrary } from '../context/LibraryContext';
 import { usePlayer } from '../context/PlayerContext';
 import { fileService } from '../services/fileService';
 import { useNavigate } from 'react-router-dom';
-import { Music, SlidersHorizontal, Calendar, ArrowDownAZ, ArrowUpZA, HardDrive, Check, X } from 'lucide-react';
+import { Music, SlidersHorizontal, Calendar, ArrowDownAZ, ArrowUpZA, HardDrive, Check, X, Play } from 'lucide-react';
 import SongItem from '../components/SongItem';
 import AddMusicButton from '../components/AddMusicButton';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -11,7 +11,7 @@ import CustomCoverModal from '../components/CustomCoverModal';
 
 const Library = () => {
   const { songs, playlists, renameSong, deleteSong, addSongToPlaylist, updateSongCover } = useLibrary();
-  const { playSong, currentSong, isPlaying, togglePlay } = usePlayer();
+  const { playSong, currentSong, isPlaying, togglePlay, updateQueue } = usePlayer();
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,10 +110,21 @@ const Library = () => {
   const handleSongPlayPause = (song) => {
     setOpenMenuSongId(null);
     if (currentSong?.id === song.id) {
+      if (updateQueue) {
+        updateQueue(sortedSongs);
+      }
       togglePlay();
     } else {
-      // Play in library context with filteredSongs as queue!
-      playSong(song, filteredSongs);
+      // Play in library context with sortedSongs as queue so playback follows filtered/sorted order!
+      playSong(song, sortedSongs);
+    }
+  };
+
+  const handlePlayAll = () => {
+    if (sortedSongs.length > 0) {
+      setOpenMenuSongId(null);
+      // Starts from the very first song in the filtered list, queue follows filtered order!
+      playSong(sortedSongs[0], sortedSongs);
     }
   };
 
@@ -213,23 +224,38 @@ const Library = () => {
 
       {/* Track count indicator & Active Sort Filter Chip */}
       <div className="flex items-center justify-between mb-4 px-1 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black uppercase tracking-widest text-indigo-950 dark:text-white">
             ALL SONGS ({sortedSongs.length})
           </span>
           <button
             type="button"
             onClick={() => setShowFilterModal(true)}
-            className="flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-indigo-600 text-white dark:bg-indigo-400 dark:text-slate-950 max-border shadow-xs hover:opacity-90 cursor-pointer"
+            className="flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-indigo-600 text-white dark:bg-indigo-400 dark:text-slate-950 max-border shadow-xs hover:opacity-90 cursor-pointer active:scale-95"
             title="Change filter/sort"
           >
             <SlidersHorizontal size={10} />
             <span>{currentSortObj.label}</span>
           </button>
         </div>
-        <span className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 bg-amber-400/20 px-2.5 py-0.5 rounded border border-amber-500/40">
-          OFFLINE READY
-        </span>
+
+        <div className="flex items-center gap-2">
+          {sortedSongs.length > 0 && (
+            <button
+              id="library-play-all-btn"
+              type="button"
+              onClick={handlePlayAll}
+              className="flex items-center gap-1.5 text-xs font-black uppercase px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white max-border shadow-sm cursor-pointer active:scale-95 transition-all"
+              title="Start playing from the 1st song in the filtered list"
+            >
+              <Play size={12} fill="currentColor" />
+              <span>PLAY ALL ({sortedSongs.length})</span>
+            </button>
+          )}
+          <span className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 bg-amber-400/20 px-2.5 py-1 rounded border border-amber-500/40">
+            OFFLINE READY
+          </span>
+        </div>
       </div>
 
       {/* Filter / Sort Selection Modal */}

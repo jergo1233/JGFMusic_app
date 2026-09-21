@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLibrary } from '../context/LibraryContext';
-import { ChevronDown, Play, Pause, Image as ImageIcon } from 'lucide-react';
+import { ChevronDown, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
 import VolumeControl from '../components/VolumeControl';
@@ -107,29 +107,6 @@ const NowPlayingPage = () => {
               />
             </div>
           )}
-
-          {/* Centered Pause & Play Button Overlay */}
-          <div className="absolute inset-0 bg-black/25 group-hover:bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center transition-all z-30">
-            <button
-              type="button"
-              id="now-playing-center-play-pause-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePlay();
-              }}
-              className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-500 dark:hover:bg-indigo-400 text-white max-border shadow-[0_8px_30px_rgba(0,0,0,0.5)] flex items-center justify-center transform active:scale-90 group-hover:scale-105 transition-all cursor-pointer"
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? (
-                <Pause size={36} fill="currentColor" />
-              ) : (
-                <Play size={36} fill="currentColor" className="ml-1" />
-              )}
-            </button>
-            <span className="mt-1.5 text-[9px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded-full bg-black/60 border border-white/20 shadow-md pointer-events-none">
-              {isPlaying ? 'PAUSE' : 'PLAY'}
-            </span>
-          </div>
 
           {/* Authentic DJ Hand touching/holding the CD */}
           <DjCdHand 
