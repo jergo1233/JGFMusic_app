@@ -35,8 +35,8 @@ export const getNextScheduleDate = (sched) => {
   if (sched.date) {
     const parts = sched.date.split('-').map(Number);
     let target = new Date(parts[0], parts[1] - 1, parts[2], h, m, 0, 0);
-    // If the scheduled time has passed and auto-renew / reusable is active, push to next valid occurrence
-    if (target.getTime() <= currentTs && (sched.autoRenew || sched.reusable)) {
+    // If the scheduled time on that date has already passed, push to next valid occurrence
+    if (target.getTime() <= currentTs) {
       let nextTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
       if (nextTarget.getTime() <= currentTs) {
         nextTarget.setDate(nextTarget.getDate() + 1);

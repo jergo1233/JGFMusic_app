@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLibrary } from '../context/LibraryContext';
 import { usePlayer } from '../context/PlayerContext';
-import { schedulerService } from '../services/schedulerService';
+import { schedulerService, getNextScheduleDate } from '../services/schedulerService';
 import { Trash2, Plus, Clock, Calendar, Music, ListMusic, Check, AlertCircle, Play, Repeat, Edit2, X } from 'lucide-react';
 import { generateId } from '../utils/format';
 import { useLocation } from 'react-router-dom';
@@ -18,7 +18,6 @@ const SchedulePage = () => {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [repeat, setRepeat] = useState('daily'); // 'daily', 'weekdays', 'once'
-  const [autoRenew, setAutoRenew] = useState(true); // Reusable auto-renewal
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -40,10 +39,11 @@ const SchedulePage = () => {
 
   const openScheduleForm = () => {
     setEditingScheduleId(null);
-    setDate(getTodayStr());
-    setTime(getTimeWithOffset(5));
+    const defaultTime = getTimeWithOffset(5);
+    setTime(defaultTime);
     setRepeat('daily');
-    setAutoRenew(true);
+    const nextTarget = getNextScheduleDate({ time: defaultTime, repeat: 'daily' });
+    setDate(`${nextTarget.getFullYear()}-${String(nextTarget.getMonth() + 1).padStart(2, '0')}-${String(nextTarget.getDate()).padStart(2, '0')}`);
     setErrorMessage('');
     
     if (!targetId) {
@@ -57,22 +57,39 @@ const SchedulePage = () => {
     setEditingScheduleId(sched.id);
     setType(sched.type || 'song');
     setTargetId(sched.targetId);
-    setDate(sched.date || getTodayStr());
-    setTime(sched.time || getTimeWithOffset(5));
-    setRepeat(sched.repeat || 'daily');
-    setAutoRenew(sched.autoRenew !== false);
+    const schedTime = sched.time || getTimeWithOffset(5);
+    const schedRepeat = sched.repeat || 'daily';
+    setTime(schedTime);
+    setRepeat(schedRepeat);
+    const nextTarget = getNextScheduleDate({ time: schedTime, repeat: schedRepeat, date: sched.date });
+    setDate(`${nextTarget.getFullYear()}-${String(nextTarget.getMonth() + 1).padStart(2, '0')}-${String(nextTarget.getDate()).padStart(2, '0')}`);
     setErrorMessage('');
     setShowForm(true);
+  };
+
+  const handleRepeatChange = (newRepeat) => {
+    setRepeat(newRepeat);
+    const target = getNextScheduleDate({ time: time || getTimeWithOffset(5), repeat: newRepeat, date });
+    setDate(`${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`);
+  };
+
+  const handleTimeChange = (newTime) => {
+    setTime(newTime);
+    if (repeat === 'daily' || repeat === 'weekdays') {
+      const target = getNextScheduleDate({ time: newTime, repeat });
+      setDate(`${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`);
+    }
   };
 
   useEffect(() => {
     if (location.state?.prefillTargetId) {
       setTargetId(location.state.prefillTargetId);
       setType(location.state.prefillType || 'song');
-      setDate(getTodayStr());
-      setTime(getTimeWithOffset(5));
+      const defaultTime = getTimeWithOffset(5);
+      setTime(defaultTime);
       setRepeat('daily');
-      setAutoRenew(true);
+      const nextTarget = getNextScheduleDate({ time: defaultTime, repeat: 'daily' });
+      setDate(`${nextTarget.getFullYear()}-${String(nextTarget.getMonth() + 1).padStart(2, '0')}-${String(nextTarget.getDate()).padStart(2, '0')}`);
       setShowForm(true);
       window.history.replaceState({}, document.title);
     }
@@ -89,8 +106,10 @@ const SchedulePage = () => {
   };
 
   const handleApplyPreset = (minutes) => {
-    setTime(getTimeWithOffset(minutes));
-    setDate(getTodayStr());
+    const newTime = getTimeWithOffset(minutes);
+    setTime(newTime);
+    const target = getNextScheduleDate({ time: newTime, repeat, date: getTodayStr() });
+    setDate(`${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`);
     setErrorMessage('');
   };
 
@@ -110,8 +129,23 @@ const SchedulePage = () => {
       }
     }
 
-    let finalDate = date || getTodayStr();
     let finalTime = time || getTimeWithOffset(5);
+    let finalDate = date || getTodayStr();
+
+    // Mode-based target date calculation
+    if (repeat === 'daily' || repeat === 'weekdays') {
+      const nextTarget = getNextScheduleDate({ time: finalTime, repeat });
+      finalDate = `${nextTarget.getFullYear()}-${String(nextTarget.getMonth() + 1).padStart(2, '0')}-${String(nextTarget.getDate()).padStart(2, '0')}`;
+    } else {
+      // Once: If date is today and time has already passed today, advance to tomorrow
+      const [h, m] = finalTime.split(':').map(Number);
+      const parts = finalDate.split('-').map(Number);
+      const chosenDateTime = new Date(parts[0], parts[1] - 1, parts[2], h, m, 0, 0);
+      if (chosenDateTime.getTime() <= Date.now() && finalDate === getTodayStr()) {
+        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        finalDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+      }
+    }
 
     setIsSaving(true);
     try {
@@ -145,11 +179,10 @@ const SchedulePage = () => {
           date: finalDate,
           time: finalTime,
           repeat, // 'daily', 'weekdays', 'once'
-          autoRenew, // Reusable: automatically re-arms for next day
-          reusable: true,
           enabled: true,
           status: 'active',
-          updatedAt: Date.now()
+          updatedAt: Date.now(), // New timestamp guarantees trigger lock reset
+          lastTriggered: null
         };
         updated = schedules.map(s => (s.id === editingScheduleId ? savedSched : s));
       } else {
@@ -161,11 +194,11 @@ const SchedulePage = () => {
           date: finalDate,
           time: finalTime,
           repeat, // 'daily', 'weekdays', 'once'
-          autoRenew, // Reusable: automatically re-arms for next day
-          reusable: true, // Permanent reusable entry
           enabled: true,
           status: 'active',
-          createdAt: Date.now()
+          updatedAt: Date.now(),
+          createdAt: Date.now(),
+          lastTriggered: null
         };
         updated = [savedSched, ...schedules];
       }
@@ -175,11 +208,11 @@ const SchedulePage = () => {
 
       setShowForm(false);
       setEditingScheduleId(null);
-      const repeatLabel = repeat === 'daily' ? 'Daily (Every day)' : repeat === 'weekdays' ? 'Weekdays (Mon - Fri)' : 'Once (Reusable)';
+      const repeatLabel = repeat === 'daily' ? 'Daily (Every day)' : repeat === 'weekdays' ? 'Weekdays (Mon - Fri)' : 'Once (One-time)';
       if (editingScheduleId) {
-        setSuccessMessage(`Schedule updated! "${title}" time set to ${finalTime} (${repeatLabel}). Reusable alarm is active!`);
+        setSuccessMessage(`Schedule updated! "${title}" set for ${finalDate} at ${finalTime} (${repeatLabel}). Armed and ready!`);
       } else {
-        setSuccessMessage(`Schedule saved! "${title}" set for ${finalTime} (${repeatLabel}). Reusable alarm is active!`);
+        setSuccessMessage(`Schedule saved! "${title}" set for ${finalDate} at ${finalTime} (${repeatLabel}). Armed and ready!`);
       }
       setTimeout(() => setSuccessMessage(''), 7000);
     } catch (e) {
@@ -194,7 +227,18 @@ const SchedulePage = () => {
     const updated = schedules.map(s => {
       if (s.id === id) {
         const nextEnabled = !s.enabled;
-        return { ...s, enabled: nextEnabled };
+        let nextDate = s.date;
+        if (nextEnabled) {
+          const nextTarget = getNextScheduleDate({ time: s.time, repeat: s.repeat || 'daily', date: s.date });
+          nextDate = `${nextTarget.getFullYear()}-${String(nextTarget.getMonth() + 1).padStart(2, '0')}-${String(nextTarget.getDate()).padStart(2, '0')}`;
+        }
+        return { 
+          ...s, 
+          enabled: nextEnabled,
+          status: nextEnabled ? 'active' : 'paused',
+          date: nextDate,
+          updatedAt: Date.now()
+        };
       }
       return s;
     });
@@ -364,7 +408,7 @@ const SchedulePage = () => {
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setRepeat('daily')}
+                  onClick={() => handleRepeatChange('daily')}
                   className={`py-2.5 px-2 rounded-xl font-black text-[11px] sm:text-xs uppercase border-2 border-indigo-950 dark:border-indigo-300 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer active:translate-x-0.5 active:translate-y-0.5 ${
                     repeat === 'daily'
                       ? 'bg-emerald-500 text-slate-950 shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe]'
@@ -376,7 +420,7 @@ const SchedulePage = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRepeat('weekdays')}
+                  onClick={() => handleRepeatChange('weekdays')}
                   className={`py-2.5 px-2 rounded-xl font-black text-[11px] sm:text-xs uppercase border-2 border-indigo-950 dark:border-indigo-300 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer active:translate-x-0.5 active:translate-y-0.5 ${
                     repeat === 'weekdays'
                       ? 'bg-sky-400 text-slate-950 shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe]'
@@ -388,7 +432,7 @@ const SchedulePage = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRepeat('once')}
+                  onClick={() => handleRepeatChange('once')}
                   className={`py-2.5 px-2 rounded-xl font-black text-[11px] sm:text-xs uppercase border-2 border-indigo-950 dark:border-indigo-300 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer active:translate-x-0.5 active:translate-y-0.5 ${
                     repeat === 'once'
                       ? 'bg-purple-400 text-slate-950 shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe]'
@@ -406,7 +450,7 @@ const SchedulePage = () => {
               <div>
                 <label className="block text-xs font-black uppercase tracking-wider text-indigo-950 dark:text-amber-300 mb-1 flex items-center gap-1">
                   <Calendar size={14} className="text-indigo-600 dark:text-amber-400 stroke-[2.5]" />
-                  <span>DATE</span>
+                  <span>TARGET DATE</span>
                 </label>
                 <input
                   type="date"
@@ -419,12 +463,12 @@ const SchedulePage = () => {
               <div>
                 <label className="block text-xs font-black uppercase tracking-wider text-indigo-950 dark:text-amber-300 mb-1 flex items-center gap-1">
                   <Clock size={14} className="text-indigo-600 dark:text-amber-400 stroke-[2.5]" />
-                  <span>TIME (ALARM TIME)</span>
+                  <span>ALARM TIME</span>
                 </label>
                 <input
                   type="time"
                   value={time}
-                  onChange={e => setTime(e.target.value)}
+                  onChange={e => handleTimeChange(e.target.value)}
                   className="w-full bg-white dark:bg-slate-950 text-slate-950 dark:text-white p-3 border-3 border-indigo-950 dark:border-indigo-300 rounded-xl shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe] font-black text-sm uppercase font-mono outline-none"
                 />
               </div>
@@ -445,25 +489,24 @@ const SchedulePage = () => {
               ))}
             </div>
 
-            {/* Auto-Renew Switch Container */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-white dark:bg-slate-950 border-3 border-indigo-950 dark:border-indigo-300 shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe]">
-              <div className="flex items-center gap-2">
-                <Repeat size={18} className="text-indigo-600 dark:text-amber-400 stroke-[2.5]" />
+            {/* Next Trigger Live Preview Banner (Replaces Auto-Renew Checkbox) */}
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-indigo-50/90 dark:bg-slate-950 border-3 border-indigo-950 dark:border-indigo-300 shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 border-2 border-indigo-950 flex items-center justify-center shrink-0">
+                  <Clock size={16} className="stroke-[2.5]" />
+                </div>
                 <div>
                   <p className="text-xs font-black uppercase text-indigo-950 dark:text-white">
-                    Automatic Repeat (Auto-Renew)
+                    Next Trigger ({repeat === 'daily' ? 'Daily Alarm' : repeat === 'weekdays' ? 'Weekdays' : 'One-Time'})
                   </p>
-                  <p className="text-[10px] font-bold text-gray-600 dark:text-gray-400">
-                    Awtomatikong mag-re-arm sa susunod na araw
+                  <p className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                    Will ring on <span className="font-mono font-black text-indigo-700 dark:text-amber-300">{date || getTodayStr()}</span> at <span className="font-mono font-black text-indigo-700 dark:text-amber-300">{time || '00:00'}</span>
                   </p>
                 </div>
               </div>
-              <input
-                type="checkbox"
-                checked={autoRenew}
-                onChange={e => setAutoRenew(e.target.checked)}
-                className="w-5 h-5 accent-indigo-600 cursor-pointer"
-              />
+              <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-emerald-400 text-slate-950 border-2 border-indigo-950 shadow-[1px_1px_0px_#1e1b4b]">
+                ARMED
+              </span>
             </div>
 
             {errorMessage && (
@@ -535,7 +578,7 @@ const SchedulePage = () => {
                     )}
                     {isOnce && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-800 dark:text-purple-300 border border-purple-500/40">
-                        ⏰ Reusable
+                        ⏰ Once
                       </span>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { playbackService } from '../services/playbackService';
-import { schedulerService } from '../services/schedulerService';
+import { schedulerService, getNextScheduleDate } from '../services/schedulerService';
 import { useLibrary } from './LibraryContext';
 import { fileService } from '../services/fileService';
 import { storageService } from '../services/storageService';
@@ -141,6 +141,17 @@ export const PlayerProvider = ({ children }) => {
       } else {
         schedulerService.stopBackgroundAlarmKeepAlive();
       }
+
+      // Invalidate triggered keys for schedules that were re-armed or updated with a new updatedAt
+      triggeredRef.current.forEach(key => {
+        const parts = key.split('_');
+        const keyId = parts[0];
+        const keyUpdatedTs = Number(parts[1]) || 0;
+        const matched = schedules.find(s => s.id === keyId);
+        if (!matched || !matched.enabled || (matched.updatedAt && matched.updatedAt > keyUpdatedTs)) {
+          triggeredRef.current.delete(key);
+        }
+      });
     }
   }, [schedules]);
 
@@ -212,12 +223,15 @@ export const PlayerProvider = ({ children }) => {
         if (!sched.enabled) return;
 
         let shouldTrigger = false;
-        const schedKey = `${sched.id}_${todayStr}_${sched.time}`;
+        // The trigger key includes updatedAt so that editing or resetting the time starts a fresh trigger cycle!
+        const schedKey = `${sched.id}_${sched.updatedAt || sched.createdAt || 0}_${todayStr}_${sched.time}`;
         const [sh, sm] = (sched.time || '00:00').split(':').map(Number);
         const schedDateToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0, 0);
         const schedTodayTimestamp = schedDateToday.getTime();
-        // Allow up to 15-minute window if phone was asleep and just woke or timer was slightly delayed
-        const isDueNow = nowTimestamp >= schedTodayTimestamp && (nowTimestamp - schedTodayTimestamp) <= 15 * 60 * 1000;
+
+        // Safety: only catch up if the alarm was armed before or right around the alarm time
+        const setBeforeAlarm = (sched.updatedAt || sched.createdAt || 0) <= (schedTodayTimestamp + 30000);
+        const isDueNow = setBeforeAlarm && nowTimestamp >= schedTodayTimestamp && (nowTimestamp - schedTodayTimestamp) <= 15 * 60 * 1000;
 
         if (sched.repeat === 'daily') {
           if (!triggeredRef.current.has(schedKey) && (sched.time === timeStr || isDueNow)) {
@@ -232,13 +246,14 @@ export const PlayerProvider = ({ children }) => {
         } else {
           // Once / Specific date
           if (!triggeredRef.current.has(schedKey)) {
-            const isDateMatch = sched.date === todayStr;
+            const isDateMatch = !sched.date || sched.date === todayStr;
             let targetTs = schedTodayTimestamp;
             if (sched.date) {
               const p = sched.date.split('-').map(Number);
               targetTs = new Date(p[0], p[1] - 1, p[2], sh, sm, 0, 0).getTime();
             }
-            const isPastDue = nowTimestamp >= targetTs && (nowTimestamp - targetTs) <= 15 * 60 * 1000;
+            const setBeforeTarget = (sched.updatedAt || sched.createdAt || 0) <= (targetTs + 30000);
+            const isPastDue = setBeforeTarget && nowTimestamp >= targetTs && (nowTimestamp - targetTs) <= 15 * 60 * 1000;
 
             if ((isDateMatch && sched.time === timeStr) || isPastDue) {
               shouldTrigger = true;
@@ -251,33 +266,39 @@ export const PlayerProvider = ({ children }) => {
           console.log("Triggering scheduled music alarm:", sched.title);
           playScheduledItem(sched);
 
-          // Handle reusable schedule persistence
+          // Handle schedule progression based on repeat mode
           if (sched.repeat === 'once' || !sched.repeat) {
-            if (sched.autoRenew) {
-              // Automatically re-arm for tomorrow at same time
-              const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-              const nextDateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
-              updatedSchedules[idx] = {
-                ...sched,
-                date: nextDateStr,
-                enabled: true,
-                lastTriggered: nowTimestamp
-              };
-              schedulesUpdated = true;
-            } else {
-              // Keep schedule in list so user can tap REUSE anytime
-              updatedSchedules[idx] = {
-                ...sched,
-                enabled: false,
-                status: 'completed',
-                lastTriggered: nowTimestamp
-              };
-              schedulesUpdated = true;
-            }
-          } else {
-            // Daily / Weekdays: update lastTriggered timestamp
+            // One-time alarm completed: mark status completed, enabled: false
             updatedSchedules[idx] = {
               ...sched,
+              enabled: false,
+              status: 'completed',
+              lastTriggered: nowTimestamp
+            };
+            schedulesUpdated = true;
+          } else if (sched.repeat === 'daily') {
+            // Daily: Automatically armed for next day!
+            const nextTarget = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            const nextDateStr = `${nextTarget.getFullYear()}-${String(nextTarget.getMonth() + 1).padStart(2, '0')}-${String(nextTarget.getDate()).padStart(2, '0')}`;
+            updatedSchedules[idx] = {
+              ...sched,
+              date: nextDateStr,
+              enabled: true,
+              status: 'active',
+              lastTriggered: nowTimestamp
+            };
+            schedulesUpdated = true;
+          } else if (sched.repeat === 'weekdays') {
+            // Weekdays: Automatically armed for next weekday!
+            const nextTarget = getNextScheduleDate({ time: sched.time, repeat: 'weekdays' });
+            const y = nextTarget.getFullYear();
+            const m = String(nextTarget.getMonth() + 1).padStart(2, '0');
+            const d = String(nextTarget.getDate()).padStart(2, '0');
+            updatedSchedules[idx] = {
+              ...sched,
+              date: `${y}-${m}-${d}`,
+              enabled: true,
+              status: 'active',
               lastTriggered: nowTimestamp
             };
             schedulesUpdated = true;
