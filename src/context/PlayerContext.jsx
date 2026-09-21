@@ -73,6 +73,7 @@ export const PlayerProvider = ({ children }) => {
     // Wake lock & audio context priming for background & lockscreen playback
     schedulerService.primeAudioKeepAlive();
     schedulerService.requestWakeLock();
+    schedulerService.stopBackgroundAlarmKeepAlive();
 
     let targetTitle = sched.title || 'Scheduled Music';
     let willPlaySong = null;
@@ -100,41 +101,62 @@ export const PlayerProvider = ({ children }) => {
 
     if (!willPlaySong) return;
 
-    // If this is triggered directly by user gesture (confirm button or play test), play directly
-    if (isUserGesture) {
-      setScheduledAlarmPrompt(null);
-      await playSong(willPlaySong, willPlayQueue);
-      return;
-    }
+    // Alarm clock behavior: Ensure max volume and unmuted like a real phone alarm
+    try {
+      playbackService.setVolume(1.0);
+      setVolumeState(1.0);
+      setIsMuted(false);
+      if (playbackService.audio) {
+        playbackService.audio.muted = false;
+      }
+    } catch (e) {}
 
-    // Try background/direct autoplay first
-    const playResult = await playSong(willPlaySong, willPlayQueue);
-    if (!playResult || !playResult.success) {
-      // Browser blocked autoplay due to user gesture policy!
-      // Provide immediate interactive confirmation prompt with ✅ button
-      setScheduledAlarmPrompt({
-        id: sched.id || 'sched_' + Date.now(),
-        targetId: sched.targetId,
-        type: sched.type || 'song',
-        title: targetTitle,
-        time: sched.time || 'Now',
-        song: willPlaySong,
-        queue: willPlayQueue
-      });
-    } else {
-      setScheduledAlarmPrompt(null);
-    }
+    // Start mobile phone vibration pattern
+    schedulerService.triggerAlarmHaptics();
+
+    // Play song directly
+    await playSong(willPlaySong, willPlayQueue);
+
+    // Always display the Phone Alarm Clock ringing screen with Snooze and Dismiss buttons
+    setScheduledAlarmPrompt({
+      id: sched.id || 'sched_' + Date.now(),
+      targetId: sched.targetId,
+      type: sched.type || 'song',
+      title: targetTitle,
+      time: sched.time || 'Now',
+      song: willPlaySong,
+      queue: willPlayQueue,
+      scheduleItem: sched
+    });
   };
 
-  // Sync schedules with Service Worker & maintain WakeLock when schedules are active
+  // Sync schedules with Service Worker & maintain WakeLock and silent audio keepalive when schedules are active
   useEffect(() => {
     if (schedules && schedules.length > 0) {
       schedulerService.syncWithServiceWorker(schedules);
       const hasActiveToday = schedules.some(s => s.enabled);
       if (hasActiveToday) {
         schedulerService.requestWakeLock();
+        schedulerService.startBackgroundAlarmKeepAlive();
+      } else {
+        schedulerService.stopBackgroundAlarmKeepAlive();
       }
     }
+  }, [schedules]);
+
+  // Re-acquire WakeLock and ensure keepalive is running whenever screen turns on or user switches tabs
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const hasActiveToday = schedules && schedules.some(s => s.enabled);
+        if (hasActiveToday) {
+          schedulerService.requestWakeLock();
+          schedulerService.startBackgroundAlarmKeepAlive();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [schedules]);
 
   // Listen for Service Worker background alarm auto-play messages
@@ -191,14 +213,19 @@ export const PlayerProvider = ({ children }) => {
 
         let shouldTrigger = false;
         const schedKey = `${sched.id}_${todayStr}_${sched.time}`;
+        const [sh, sm] = (sched.time || '00:00').split(':').map(Number);
+        const schedDateToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0, 0);
+        const schedTodayTimestamp = schedDateToday.getTime();
+        // Allow up to 15-minute window if phone was asleep and just woke or timer was slightly delayed
+        const isDueNow = nowTimestamp >= schedTodayTimestamp && (nowTimestamp - schedTodayTimestamp) <= 15 * 60 * 1000;
 
         if (sched.repeat === 'daily') {
-          if (!triggeredRef.current.has(schedKey) && sched.time === timeStr) {
+          if (!triggeredRef.current.has(schedKey) && (sched.time === timeStr || isDueNow)) {
             shouldTrigger = true;
             triggeredRef.current.add(schedKey);
           }
         } else if (sched.repeat === 'weekdays') {
-          if (isWeekday && !triggeredRef.current.has(schedKey) && sched.time === timeStr) {
+          if (isWeekday && !triggeredRef.current.has(schedKey) && (sched.time === timeStr || isDueNow)) {
             shouldTrigger = true;
             triggeredRef.current.add(schedKey);
           }
@@ -206,11 +233,14 @@ export const PlayerProvider = ({ children }) => {
           // Once / Specific date
           if (!triggeredRef.current.has(schedKey)) {
             const isDateMatch = sched.date === todayStr;
-            const schedDateTime = new Date(`${sched.date}T${sched.time}:00`);
-            const schedTimestamp = schedDateTime.getTime();
-            const isRecentPast = !isNaN(schedTimestamp) && nowTimestamp >= schedTimestamp && (nowTimestamp - schedTimestamp) <= 3 * 60 * 1000;
+            let targetTs = schedTodayTimestamp;
+            if (sched.date) {
+              const p = sched.date.split('-').map(Number);
+              targetTs = new Date(p[0], p[1] - 1, p[2], sh, sm, 0, 0).getTime();
+            }
+            const isPastDue = nowTimestamp >= targetTs && (nowTimestamp - targetTs) <= 15 * 60 * 1000;
 
-            if ((isDateMatch && sched.time === timeStr) || isRecentPast) {
+            if ((isDateMatch && sched.time === timeStr) || isPastDue) {
               shouldTrigger = true;
               triggeredRef.current.add(schedKey);
             }
@@ -475,15 +505,58 @@ export const PlayerProvider = ({ children }) => {
   };
 
   const confirmScheduledPlay = async () => {
-    if (scheduledAlarmPrompt) {
-      const prompt = scheduledAlarmPrompt;
-      setScheduledAlarmPrompt(null);
-      await playScheduledItem(prompt, true);
+    // User chooses "Keep Playing Music"
+    schedulerService.stopAlarmHaptics();
+    if (scheduledAlarmPrompt?.song && !isPlaying) {
+      await playSong(scheduledAlarmPrompt.song, scheduledAlarmPrompt.queue);
     }
+    setScheduledAlarmPrompt(null);
   };
 
   const dismissScheduledAlarmPrompt = () => {
+    // User stops the alarm
+    schedulerService.stopAlarmHaptics();
+    playbackService.pause();
+    setIsPlaying(false);
     setScheduledAlarmPrompt(null);
+
+    const hasActive = schedules && schedules.some(s => s.enabled);
+    if (hasActive) {
+      schedulerService.startBackgroundAlarmKeepAlive();
+    }
+  };
+
+  const snoozeScheduledAlarm = (prompt) => {
+    schedulerService.stopAlarmHaptics();
+    playbackService.pause();
+    setIsPlaying(false);
+    setScheduledAlarmPrompt(null);
+
+    // Snooze for 5 minutes
+    const snoozeTime = new Date(Date.now() + 5 * 60 * 1000);
+    const sh = String(snoozeTime.getHours()).padStart(2, '0');
+    const sm = String(snoozeTime.getMinutes()).padStart(2, '0');
+    const snoozeTimeStr = `${sh}:${sm}`;
+    const snoozeDateStr = `${snoozeTime.getFullYear()}-${String(snoozeTime.getMonth() + 1).padStart(2, '0')}-${String(snoozeTime.getDate()).padStart(2, '0')}`;
+
+    const newSnoozeItem = {
+      id: 'snooze_' + Date.now(),
+      targetId: prompt?.targetId || (prompt?.song ? prompt.song.id : ''),
+      type: prompt?.type || 'song',
+      title: `(Snooze) ${prompt?.title || 'Music Alarm'}`,
+      time: snoozeTimeStr,
+      date: snoozeDateStr,
+      repeat: 'once',
+      enabled: true,
+      autoRenew: false
+    };
+
+    const newSchedules = [...schedules, newSnoozeItem];
+    if (saveSchedules) {
+      saveSchedules(newSchedules);
+    }
+    schedulerService.syncWithServiceWorker(newSchedules);
+    schedulerService.startBackgroundAlarmKeepAlive();
   };
 
   return (
@@ -497,7 +570,8 @@ export const PlayerProvider = ({ children }) => {
       playScheduledItem,
       scheduledAlarmPrompt,
       confirmScheduledPlay,
-      dismissScheduledAlarmPrompt
+      dismissScheduledAlarmPrompt,
+      snoozeScheduledAlarm
     }}>
       {children}
     </PlayerContext.Provider>

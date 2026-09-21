@@ -1,5 +1,10 @@
 let wakeLockSentinel = null;
 let primedAudioContext = null;
+let silentAudioElement = null;
+let hapticInterval = null;
+
+// Clean, cross-browser 1-second silent WAV loop for OS media-session keep-alive
+const SILENT_WAV_URI = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
 
 // Helper to calculate the next occurrence timestamp for any schedule (Daily, Weekdays, or Once)
 export const getNextScheduleDate = (sched) => {
@@ -60,7 +65,6 @@ export const schedulerService = {
         if (primedAudioContext.state === 'suspended') {
           primedAudioContext.resume();
         }
-        // Play an imperceptible silent 0.01s buffer to authorize audio playback
         const buffer = primedAudioContext.createBuffer(1, 1, 22050);
         const source = primedAudioContext.createBufferSource();
         source.buffer = buffer;
@@ -72,8 +76,75 @@ export const schedulerService = {
     }
   },
 
+  // Start background silent audio loop: keeps CPU awake and keeps audio session active when phone sleeps
+  startBackgroundAlarmKeepAlive() {
+    this.primeAudioKeepAlive();
+    this.requestWakeLock();
+
+    try {
+      if (!silentAudioElement) {
+        silentAudioElement = new Audio(SILENT_WAV_URI);
+        silentAudioElement.loop = true;
+        silentAudioElement.volume = 0.001; // Tiny non-zero volume allows OS to classify as active audio
+      }
+
+      const playPromise = silentAudioElement.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Silent audio keepalive waiting for first user touch:', err);
+        });
+      }
+
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'Alarm Clock Armed ⏰',
+          artist: 'JGFMusic Offline Alarm',
+          album: 'Background Ready'
+        });
+      }
+    } catch (err) {
+      console.warn('Background alarm keepalive error:', err);
+    }
+  },
+
+  stopBackgroundAlarmKeepAlive() {
+    if (silentAudioElement) {
+      try {
+        silentAudioElement.pause();
+      } catch (e) {}
+    }
+  },
+
+  // Phone alarm vibration & buzzer like built-in mobile alarm clock
+  triggerAlarmHaptics() {
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([1000, 400, 1000, 400, 1500, 400, 2000]);
+        if (hapticInterval) clearInterval(hapticInterval);
+        hapticInterval = setInterval(() => {
+          try {
+            navigator.vibrate([1000, 400, 1000, 400, 1500]);
+          } catch (e) {}
+        }, 5000);
+      } catch (e) {}
+    }
+  },
+
+  stopAlarmHaptics() {
+    if (hapticInterval) {
+      clearInterval(hapticInterval);
+      hapticInterval = null;
+    }
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate(0);
+      } catch (e) {}
+    }
+  },
+
   async requestPermissions() {
     this.primeAudioKeepAlive();
+    this.startBackgroundAlarmKeepAlive();
     if ('Notification' in window) {
       try {
         const res = await Notification.requestPermission();
@@ -117,7 +188,6 @@ export const schedulerService = {
     const now = new Date();
     const [h, m] = (timeStr || '00:00').split(':').map(Number);
     const targetToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
-
     const target = targetToday.getTime() > now.getTime() ? targetToday : new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const y = target.getFullYear();
     const month = String(target.getMonth() + 1).padStart(2, '0');
@@ -128,6 +198,11 @@ export const schedulerService = {
   async syncWithServiceWorker(schedules = []) {
     try {
       this.primeAudioKeepAlive();
+      const hasActive = schedules.some(s => s.enabled);
+      if (hasActive) {
+        this.startBackgroundAlarmKeepAlive();
+      }
+
       if ('serviceWorker' in navigator) {
         const payload = {
           type: 'SYNC_SCHEDULES',
@@ -152,6 +227,7 @@ export const schedulerService = {
 
   async schedulePlayback(scheduleItem, allSchedules = []) {
     this.primeAudioKeepAlive();
+    this.startBackgroundAlarmKeepAlive();
     await this.requestWakeLock();
 
     const schedulesList = allSchedules.length > 0 ? allSchedules : [scheduleItem];
@@ -165,7 +241,7 @@ export const schedulerService = {
         setTimeout(() => {
           try {
             new Notification(`⏰ ALARM: ${scheduleItem.title}`, {
-              body: `Time for music: "${scheduleItem.title}". Tap to start playing.`,
+              body: `Time for music: "${scheduleItem.title}". Playing now!`,
               icon: '/icon.svg',
               tag: `alarm_${scheduleItem.id}`,
               renotify: true
@@ -180,6 +256,10 @@ export const schedulerService = {
 
   async cancelSchedule(idStr, remainingSchedules = []) {
     await this.syncWithServiceWorker(remainingSchedules);
+    const hasActive = remainingSchedules.some(s => s.enabled);
+    if (!hasActive) {
+      this.stopBackgroundAlarmKeepAlive();
+    }
   }
 };
 

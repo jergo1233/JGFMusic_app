@@ -1,6 +1,6 @@
 // JGFMusic Progressive Web App Service Worker
-// Version: 2.2.0 (Automatic Cache Invalidation & Network-First for App Shell)
-const CACHE_NAME = 'jgfmusic-cache-v2.2.0';
+// Version: 2.2.1 (Alarm Clock Background Engine with Snooze & Auto-Play)
+const CACHE_NAME = 'jgfmusic-cache-v2.2.1';
 
 // Critical core assets to precache on install
 const PRECACHE_ASSETS = [
@@ -219,8 +219,9 @@ function scheduleSWTimer(sched) {
           requireInteraction: true,
           vibrate: [500, 200, 500, 200, 800, 300, 1000],
           actions: [
+            { action: 'snooze', title: '💤 SNOOZE 5M' },
             { action: 'play', title: '▶ PLAY NOW ✅' },
-            { action: 'dismiss', title: '✖ DISMISS' }
+            { action: 'dismiss', title: '✖ STOP ALARM' }
           ],
           data: {
             targetId: sched.targetId,
@@ -286,6 +287,26 @@ self.addEventListener('notificationclick', (event) => {
 
   const data = event.notification.data || {};
   const targetUrl = data.url || '/';
+
+  if (event.action === 'snooze') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        if (clientList.length > 0) {
+          for (const client of clientList) {
+            client.postMessage({
+              type: 'SNOOZE_SCHEDULED',
+              targetId: data.targetId,
+              targetType: data.type,
+              title: data.title,
+              scheduleId: data.scheduleId
+            });
+            return;
+          }
+        }
+      })
+    );
+    return;
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

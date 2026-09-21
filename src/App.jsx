@@ -36,7 +36,7 @@ const AppContent = () => {
     }
   });
   const [previewStyle, setPreviewStyle] = useState(null);
-  const { scheduledAlarmPrompt, confirmScheduledPlay, dismissScheduledAlarmPrompt } = usePlayer();
+  const { scheduledAlarmPrompt, confirmScheduledPlay, dismissScheduledAlarmPrompt, snoozeScheduledAlarm } = usePlayer();
 
   useEffect(() => {
     const handleReplay = (e) => {
@@ -110,6 +110,7 @@ const AppContent = () => {
         promptData={scheduledAlarmPrompt}
         onConfirm={confirmScheduledPlay}
         onDismiss={dismissScheduledAlarmPrompt}
+        onSnooze={snoozeScheduledAlarm}
       />
     </div>
   );

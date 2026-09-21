@@ -239,8 +239,9 @@ const SchedulePage = () => {
 
   const handleTestPlay = (sched) => {
     if (playScheduledItem) {
-      playScheduledItem(sched, true);
-      setSuccessMessage(`Testing playback: "${sched.title}"!`);
+      // Trigger full alarm test (plays song, boosts volume, activates vibration & phone alarm screen)
+      playScheduledItem(sched, false);
+      setSuccessMessage(`Alarm ringing test: "${sched.title}"!`);
       setTimeout(() => setSuccessMessage(''), 3500);
     }
   };
@@ -255,10 +256,10 @@ const SchedulePage = () => {
           </div>
           <div>
             <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-indigo-950 dark:text-white">
-              Schedules
+              Alarm & Schedules
             </h2>
             <p className="text-xs font-black text-indigo-700 dark:text-amber-300 uppercase tracking-wider">
-              REUSABLE AUTO-PLAY TIMERS ({schedules.length})
+              AUTO-PLAY ALARMS ({schedules.length}) • PLAYS EVEN IN SLEEP MODE ⏰
             </p>
           </div>
         </div>
@@ -269,7 +270,7 @@ const SchedulePage = () => {
             className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-xl max-border shadow-sm cursor-pointer active:scale-95"
           >
             <Plus size={16} className="stroke-[3]" />
-            <span>NEW SCHEDULE</span>
+            <span>NEW ALARM</span>
           </button>
         )}
       </div>
