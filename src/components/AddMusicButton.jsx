@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { fileService } from '../services/fileService';
 import { useLibrary } from '../context/LibraryContext';
-import { Plus, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { schedulerService } from '../services/schedulerService';
+import { Plus, AlertTriangle, X } from 'lucide-react';
 
-const AddMusicButton = () => {
+const AddMusicButton = ({ 
+  label = "ADD SONG", 
+  className = "", 
+  id = "add-music-library-btn",
+  showIcon = true 
+}) => {
   const { addMusic } = useLibrary();
   const [duplicateModal, setDuplicateModal] = useState({
     isOpen: false,
@@ -12,6 +18,8 @@ const AddMusicButton = () => {
   });
 
   const handleAddMusic = async () => {
+    // Prime audio context & session immediately on user click to prepare background/sleep capability
+    schedulerService.primeAudioKeepAlive();
     try {
       const files = await fileService.pickAudioFiles();
       if (files && files.length > 0) {
@@ -25,21 +33,23 @@ const AddMusicButton = () => {
         }
       }
     } catch (e) {
-      console.error(e);
-      alert("Unable to access files.");
+      console.error("Unable to access audio files:", e);
     }
   };
+
+  const defaultClasses = "flex items-center justify-center gap-1.5 sm:gap-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-50 dark:hover:bg-white text-white dark:text-indigo-950 px-3.5 sm:px-5 py-3.5 sm:py-4 font-black uppercase text-xs sm:text-sm max-border rounded-2xl max-shadow hover:translate-y-0.5 hover:translate-x-0.5 transition-all shrink-0 cursor-pointer shadow-md active:scale-95 whitespace-nowrap";
 
   return (
     <>
       <button 
-        id="add-music-library-btn"
+        id={id}
+        type="button"
         onClick={handleAddMusic}
-        className="flex items-center justify-center gap-1.5 sm:gap-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-50 dark:hover:bg-white text-white dark:text-indigo-950 px-4 sm:px-5 py-4 font-black uppercase text-sm sm:text-base max-border rounded-2xl max-shadow hover:translate-y-0.5 hover:translate-x-0.5 transition-all shrink-0 cursor-pointer shadow-md active:scale-95"
-        title="Add Music from your device"
+        className={className || defaultClasses}
+        title="Add Music from your device (1-tap direct import)"
       >
-        <Plus size={22} className="stroke-[3]" />
-        <span>ADD</span>
+        {showIcon && <Plus size={20} className="stroke-[3] shrink-0" />}
+        <span>{label}</span>
       </button>
 
       {/* Duplicate Song Blocked Notification Modal */}

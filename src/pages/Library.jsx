@@ -219,7 +219,7 @@ const Library = () => {
           <span className="text-xs sm:text-sm uppercase hidden xs:inline">FILTER</span>
         </button>
 
-        <AddMusicButton />
+        <AddMusicButton label="ADD SONG" />
       </div>
 
       {/* Track count indicator & Active Sort Filter Chip */}
@@ -378,13 +378,21 @@ const Library = () => {
             />
           ))
         ) : (
-          <div className="text-center py-16 px-4 bg-indigo-50/50 dark:bg-slate-800/40 max-border rounded-3xl">
+          <div className="text-center py-16 px-4 bg-indigo-50/50 dark:bg-slate-800/40 max-border rounded-3xl flex flex-col items-center justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-600/10 dark:bg-amber-400/10 text-indigo-600 dark:text-amber-400 flex items-center justify-center mb-3 max-border">
+              <Music size={32} className="stroke-[2.5]" />
+            </div>
             <p className="font-black text-2xl text-indigo-950 dark:text-white uppercase tracking-widest">
               NO MUSIC FOUND!
             </p>
-            <p className="text-xs font-black text-indigo-700 dark:text-amber-300 uppercase mt-1">
-              Tap the ADD button above to import music from your device.
+            <p className="text-xs font-black text-indigo-700 dark:text-amber-300 uppercase mt-1 mb-5">
+              Isang button lang para mag-import ng mga kanta mula sa iyong phone.
             </p>
+            <AddMusicButton 
+              id="library-empty-add-btn" 
+              label="ADD SONGS FROM DEVICE" 
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-sm px-6 py-4 rounded-2xl max-border max-shadow shadow-md active:scale-95 transition-all cursor-pointer"
+            />
           </div>
         )}
       </div>

@@ -57,11 +57,24 @@ class PlaybackService {
     }
   }
 
-  async load(url, song) {
+  primeAudio() {
+    try {
+      if (this.audio) {
+        this.audio.muted = false;
+      }
+    } catch (e) {}
+  }
+
+  async load(url, song, forceFromBeginning = false) {
     if (this.currentUrl !== url) {
       this.audio.src = url;
       this.audio.load();
       this.currentUrl = url;
+    }
+    if (forceFromBeginning) {
+      try {
+        this.audio.currentTime = 0;
+      } catch (e) {}
     }
     if (song) {
       this.updateMediaSessionMetadata(song);
@@ -70,7 +83,11 @@ class PlaybackService {
 
   async play() {
     try {
-      await this.audio.play();
+      this.audio.muted = false;
+      const playPromise = this.audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+      }
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
       }

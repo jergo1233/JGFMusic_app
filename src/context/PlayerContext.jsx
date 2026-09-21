@@ -72,8 +72,7 @@ export const PlayerProvider = ({ children }) => {
 
     // Wake lock & audio context priming for background & lockscreen playback
     schedulerService.primeAudioKeepAlive();
-    schedulerService.requestWakeLock();
-    schedulerService.stopBackgroundAlarmKeepAlive();
+    await schedulerService.requestWakeLock();
 
     let targetTitle = sched.title || 'Scheduled Music';
     let willPlaySong = null;
@@ -114,8 +113,15 @@ export const PlayerProvider = ({ children }) => {
     // Start mobile phone vibration pattern
     schedulerService.triggerAlarmHaptics();
 
-    // Play song directly
-    await playSong(willPlaySong, willPlayQueue);
+    // Play song directly from 0:00 (forceFromBeginning = true)
+    const playResult = await playSong(willPlaySong, willPlayQueue, true);
+
+    if (playResult && playResult.success) {
+      schedulerService.stopBackgroundAlarmKeepAlive();
+    } else {
+      // If browser blocked audio playback while phone was asleep/locked, sound emergency alarm chime!
+      schedulerService.playEmergencyAlarmTone();
+    }
 
     // Always display the Phone Alarm Clock ringing screen with Snooze and Dismiss buttons
     setScheduledAlarmPrompt({
@@ -230,7 +236,7 @@ export const PlayerProvider = ({ children }) => {
         const schedTodayTimestamp = schedDateToday.getTime();
 
         // Safety: only catch up if the alarm was armed before or right around the alarm time
-        const setBeforeAlarm = (sched.updatedAt || sched.createdAt || 0) <= (schedTodayTimestamp + 30000);
+        const setBeforeAlarm = (sched.updatedAt || sched.createdAt || 0) <= (schedTodayTimestamp + 60000);
         const isDueNow = setBeforeAlarm && nowTimestamp >= schedTodayTimestamp && (nowTimestamp - schedTodayTimestamp) <= 15 * 60 * 1000;
 
         if (sched.repeat === 'daily') {
@@ -252,7 +258,7 @@ export const PlayerProvider = ({ children }) => {
               const p = sched.date.split('-').map(Number);
               targetTs = new Date(p[0], p[1] - 1, p[2], sh, sm, 0, 0).getTime();
             }
-            const setBeforeTarget = (sched.updatedAt || sched.createdAt || 0) <= (targetTs + 30000);
+            const setBeforeTarget = (sched.updatedAt || sched.createdAt || 0) <= (targetTs + 60000);
             const isPastDue = setBeforeTarget && nowTimestamp >= targetTs && (nowTimestamp - targetTs) <= 15 * 60 * 1000;
 
             if ((isDateMatch && sched.time === timeStr) || isPastDue) {
@@ -419,7 +425,7 @@ export const PlayerProvider = ({ children }) => {
     }
   };
 
-  const playSong = async (song, sourceQueue = null) => {
+  const playSong = async (song, sourceQueue = null, forceFromBeginning = false) => {
     if (!song) return;
 
     let activeQueue = sourceQueue || (queue.length > 0 ? queue : songs);
@@ -456,7 +462,11 @@ export const PlayerProvider = ({ children }) => {
 
     try {
       const url = await fileService.getFileUrl(song.fileUri);
-      await playbackService.load(url, song);
+      await playbackService.load(url, song, forceFromBeginning);
+      if (forceFromBeginning) {
+        playbackService.seek(0);
+        setCurrentTime(0);
+      }
       const playResult = await playbackService.play();
       if (playResult && playResult.success) {
         setIsPlaying(true);

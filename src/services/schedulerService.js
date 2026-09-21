@@ -1,6 +1,8 @@
 let wakeLockSentinel = null;
 let primedAudioContext = null;
 let silentAudioElement = null;
+let silentOscillator = null;
+let silentGain = null;
 let hapticInterval = null;
 
 // Clean, cross-browser 1-second silent WAV loop for OS media-session keep-alive
@@ -70,6 +72,16 @@ export const schedulerService = {
         source.buffer = buffer;
         source.connect(primedAudioContext.destination);
         source.start(0);
+
+        // Keep a continuous inaudible oscillator connected to prevent OS audio engine from sleeping
+        if (!silentOscillator) {
+          silentOscillator = primedAudioContext.createOscillator();
+          silentGain = primedAudioContext.createGain();
+          silentGain.gain.value = 0.00001; // Inaudible
+          silentOscillator.connect(silentGain);
+          silentGain.connect(primedAudioContext.destination);
+          silentOscillator.start();
+        }
       }
     } catch (e) {
       console.warn('Audio prime keepalive note:', e);
@@ -112,6 +124,38 @@ export const schedulerService = {
       try {
         silentAudioElement.pause();
       } catch (e) {}
+    }
+  },
+
+  // High-volume emergency alarm buzzer tone using primed Web Audio context
+  // Guaranteed to sound if the phone was locked/sleeping and the browser policy delayed file streaming
+  playEmergencyAlarmTone() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!primedAudioContext) {
+        primedAudioContext = new AudioCtx();
+      }
+      if (primedAudioContext.state === 'suspended') {
+        primedAudioContext.resume();
+      }
+
+      const now = primedAudioContext.currentTime;
+      // Dual-frequency alarm chime loop (880Hz / 1174Hz) like an authentic digital alarm clock
+      for (let i = 0; i < 8; i++) {
+        const osc = primedAudioContext.createOscillator();
+        const gain = primedAudioContext.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(i % 2 === 0 ? 880 : 1174, now + i * 0.28);
+        gain.gain.setValueAtTime(0.5, now + i * 0.28);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (i + 1) * 0.28);
+        osc.connect(gain);
+        gain.connect(primedAudioContext.destination);
+        osc.start(now + i * 0.28);
+        osc.stop(now + (i + 1) * 0.28);
+      }
+    } catch (e) {
+      console.warn('Emergency alarm tone error:', e);
     }
   },
 

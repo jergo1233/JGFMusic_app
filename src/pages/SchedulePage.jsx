@@ -5,6 +5,7 @@ import { schedulerService, getNextScheduleDate } from '../services/schedulerServ
 import { Trash2, Plus, Clock, Calendar, Music, ListMusic, Check, AlertCircle, Play, Repeat, Edit2, X } from 'lucide-react';
 import { generateId } from '../utils/format';
 import { useLocation } from 'react-router-dom';
+import AddMusicButton from '../components/AddMusicButton';
 
 const SchedulePage = () => {
   const { schedules, saveSchedules, songs, playlists } = useLibrary();
@@ -379,24 +380,48 @@ const SchedulePage = () => {
 
             {/* Select Target */}
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-indigo-950 dark:text-amber-300 mb-1.5">
-                SELECT {type === 'song' ? 'SONG' : 'PLAYLIST'}
-              </label>
-              <select
-                value={targetId}
-                onChange={e => {
-                  setTargetId(e.target.value);
-                  setErrorMessage('');
-                }}
-                className="w-full bg-white dark:bg-slate-950 text-slate-950 dark:text-white p-3 border-3 border-indigo-950 dark:border-indigo-300 rounded-xl shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe] outline-none font-black text-xs sm:text-sm uppercase cursor-pointer"
-              >
-                <option value="">-- SELECT {type.toUpperCase()} --</option>
-                {type === 'song' ? (
-                  songs.map(s => <option key={s.id} value={s.id}>{s.title} - {s.artist}</option>)
-                ) : (
-                  playlists.map(p => <option key={p.id} value={p.id}>{p.name} ({p.songIds?.length || 0} songs)</option>)
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-indigo-950 dark:text-amber-300">
+                  SELECT {type === 'song' ? 'SONG' : 'PLAYLIST'}
+                </label>
+                {type === 'song' && songs.length > 0 && (
+                  <AddMusicButton 
+                    id="schedule-quick-add-song-btn"
+                    label="+ ADD SONG" 
+                    className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-indigo-950 shadow-[1px_1px_0px_#1e1b4b] cursor-pointer active:scale-95 transition-all"
+                    showIcon={false}
+                  />
                 )}
-              </select>
+              </div>
+
+              {type === 'song' && songs.length === 0 ? (
+                <div className="p-4 bg-amber-400/20 border-2 border-amber-500 rounded-xl flex flex-col items-center gap-2 text-center shadow-[2px_2px_0px_#1e1b4b]">
+                  <p className="text-xs font-black uppercase text-amber-950 dark:text-amber-300">
+                    Wala pang kanta sa iyong library!
+                  </p>
+                  <AddMusicButton 
+                    id="schedule-empty-add-song-btn"
+                    label="ADD SONG MULA SA PHONE" 
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase rounded-xl border-2 border-indigo-950 shadow-[2px_2px_0px_#1e1b4b] cursor-pointer active:scale-95"
+                  />
+                </div>
+              ) : (
+                <select
+                  value={targetId}
+                  onChange={e => {
+                    setTargetId(e.target.value);
+                    setErrorMessage('');
+                  }}
+                  className="w-full bg-white dark:bg-slate-950 text-slate-950 dark:text-white p-3 border-3 border-indigo-950 dark:border-indigo-300 rounded-xl shadow-[3px_3px_0px_#1e1b4b] dark:shadow-[3px_3px_0px_#c7d2fe] outline-none font-black text-xs sm:text-sm uppercase cursor-pointer"
+                >
+                  <option value="">-- SELECT {type.toUpperCase()} --</option>
+                  {type === 'song' ? (
+                    songs.map(s => <option key={s.id} value={s.id}>{s.title} - {s.artist}</option>)
+                  ) : (
+                    playlists.map(p => <option key={p.id} value={p.id}>{p.name} ({p.songIds?.length || 0} songs)</option>)
+                  )}
+                </select>
+              )}
             </div>
 
             {/* Repeat Mode - Maximalist Buttons */}
