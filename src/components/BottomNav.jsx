@@ -1,12 +1,12 @@
 import React from 'react';
-import { Library, PlaySquare, History, Clock, Settings } from 'lucide-react';
+import { FileAudio, PlaySquare, History, Clock, Settings } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 const BottomNav = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: '/library', icon: Library, label: 'Library' },
+    { path: '/library', icon: FileAudio, label: 'Library' },
     { path: '/playlists', icon: PlaySquare, label: 'Playlists' },
     { path: '/history', icon: History, label: 'History' },
     { path: '/scheduled', icon: Clock, label: 'Schedules' },

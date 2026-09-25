@@ -193,6 +193,14 @@ const SongItem = ({
               </span>
             </>
           ) : null}
+
+          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider flex-shrink-0 border ${
+            isCurrent 
+              ? 'border-white/30 bg-white/20 text-white dark:border-indigo-950/30 dark:bg-black/10 dark:text-indigo-950' 
+              : 'border-indigo-600/30 bg-indigo-600/10 dark:border-amber-400/30 dark:bg-amber-400/20 text-indigo-700 dark:text-amber-300'
+          }`}>
+            {song.format || 'MP3'}
+          </span>
         </div>
       </div>
 

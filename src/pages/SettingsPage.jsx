@@ -321,7 +321,7 @@ const SettingsPage = () => {
           </span>
         </div>
         <p className="text-indigo-700 dark:text-amber-300 text-xs font-black uppercase tracking-wider mb-4">
-          CUSTOM LOGO SA HEADER NG SCREEN
+          CUSTOM LOGO IN APP HEADER
         </p>
         <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/70 max-border mb-4 flex items-center gap-4">
           <div className="bg-indigo-600 text-white dark:bg-indigo-50 dark:text-indigo-950 max-border rounded-full w-14 h-14 flex items-center justify-center overflow-hidden p-0.5 flex-shrink-0 shadow-md">
@@ -337,7 +337,7 @@ const SettingsPage = () => {
               JGFMusic Logo
             </span>
             <p className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5">
-              {logoUrl ? 'Custom logo active sa itaas.' : 'Default official logo active.'}
+              {logoUrl ? 'Custom logo active in header.' : 'Default official logo active.'}
             </p>
           </div>
         </div>

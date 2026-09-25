@@ -346,7 +346,7 @@ const SchedulePage = () => {
             {editingScheduleId && (
               <div className="p-3 bg-amber-400/25 border-2 border-amber-500/60 rounded-xl text-xs font-black text-amber-950 dark:text-amber-200 flex items-center gap-2 shadow-[2px_2px_0px_#1e1b4b]">
                 <Edit2 size={15} className="text-amber-600 dark:text-amber-400 shrink-0 stroke-[2.5]" />
-                <span>Baguhin ang oras, kanta, o repeat mode sa ibaba.</span>
+                <span>Adjust the alarm time, song, or repeat mode below.</span>
               </div>
             )}
 
@@ -397,11 +397,11 @@ const SchedulePage = () => {
               {type === 'song' && songs.length === 0 ? (
                 <div className="p-4 bg-amber-400/20 border-2 border-amber-500 rounded-xl flex flex-col items-center gap-2 text-center shadow-[2px_2px_0px_#1e1b4b]">
                   <p className="text-xs font-black uppercase text-amber-950 dark:text-amber-300">
-                    Wala pang kanta sa iyong library!
+                    No songs in your library yet!
                   </p>
                   <AddMusicButton 
                     id="schedule-empty-add-song-btn"
-                    label="ADD SONG MULA SA PHONE" 
+                    label="ADD SONGS FROM DEVICE" 
                     className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase rounded-xl border-2 border-indigo-950 shadow-[2px_2px_0px_#1e1b4b] cursor-pointer active:scale-95"
                   />
                 </div>

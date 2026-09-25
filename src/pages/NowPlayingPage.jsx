@@ -51,7 +51,7 @@ const NowPlayingPage = () => {
           type="button"
           onClick={() => navigate(-1)} 
           className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-indigo-900/60 dark:border-indigo-300/60 bg-indigo-100/90 dark:bg-slate-800/90 text-indigo-950 dark:text-indigo-50 shadow-sm hover:bg-white dark:hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-          title="Bumalik (Minimize Player)"
+          title="Back (Minimize Player)"
         >
           <ChevronDown size={20} className="stroke-[2.8]" />
         </button>

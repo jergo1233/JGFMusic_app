@@ -1,4 +1,5 @@
 import { set, get, del } from 'idb-keyval';
+import { soundGeneratorService } from './soundGeneratorService';
 
 export const fileService = {
   async pickImageFile() {
@@ -32,6 +33,143 @@ export const fileService = {
     });
   },
 
+  isAudioFile(file) {
+    if (!file) return false;
+    const name = file.name || '';
+    const isAudioType = file.type && file.type.startsWith('audio/');
+    const hasAudioExt = /\.(mp3|wav|m4a|aac|ogg|flac|opus|weba|wma)$/i.test(name);
+    return isAudioType || hasAudioExt;
+  },
+
+  async readAllFilesFromDirectoryHandle(dirHandle) {
+    const audioFiles = [];
+    const self = this;
+    async function walk(handle, relativePath = '') {
+      try {
+        for await (const entry of handle.values()) {
+          if (entry.kind === 'file') {
+            try {
+              const file = await entry.getFile();
+              if (self.isAudioFile(file)) {
+                try {
+                  Object.defineProperty(file, 'webkitRelativePath', {
+                    value: `${relativePath}${handle.name}/${file.name}`,
+                    writable: true
+                  });
+                } catch (e) {}
+                audioFiles.push(file);
+              }
+            } catch (err) {}
+          } else if (entry.kind === 'directory') {
+            try {
+              await walk(entry, `${relativePath}${handle.name}/`);
+            } catch (err) {}
+          }
+        }
+      } catch (err) {}
+    }
+    await walk(dirHandle);
+    return audioFiles;
+  },
+
+  async autoScanAudio() {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      // Targets all audio formats without directory navigation
+      input.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus,.weba';
+      input.multiple = true;
+      
+      let resolved = false;
+      input.onchange = (e) => {
+        if (resolved) return;
+        resolved = true;
+        const allFiles = Array.from(e.target.files || []);
+        const audioFiles = allFiles.filter(f => this.isAudioFile(f));
+        resolve(audioFiles);
+      };
+
+      input.oncancel = () => {
+        if (resolved) return;
+        resolved = true;
+        resolve([]);
+      };
+
+      input.click();
+    });
+  },
+
+  async pickAudioFolder() {
+    // If showDirectoryPicker is supported in the browser context, try it first
+    if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        if (dirHandle) {
+          const files = await this.readAllFilesFromDirectoryHandle(dirHandle);
+          if (files && files.length > 0) {
+            return files;
+          }
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          return [];
+        }
+        console.warn("showDirectoryPicker fallback to input:", err);
+      }
+    }
+
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.webkitdirectory = true;
+      input.directory = true;
+      input.multiple = true;
+
+      let resolved = false;
+      input.onchange = (e) => {
+        if (resolved) return;
+        resolved = true;
+        const allFiles = Array.from(e.target.files || []);
+        const audioFiles = allFiles.filter(f => this.isAudioFile(f));
+        resolve(audioFiles);
+      };
+
+      input.oncancel = () => {
+        if (resolved) return;
+        resolved = true;
+        resolve([]);
+      };
+
+      input.click();
+    });
+  },
+
+  async pickAudioFiles() {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus,.weba,.m4b,.wma';
+      input.multiple = true;
+
+      let resolved = false;
+      input.onchange = (e) => {
+        if (resolved) return;
+        resolved = true;
+        const allFiles = Array.from(e.target.files || []);
+        const audioFiles = allFiles.filter(f => this.isAudioFile(f));
+        resolve(audioFiles);
+      };
+
+      input.oncancel = () => {
+        if (resolved) return;
+        resolved = true;
+        resolve([]);
+      };
+
+      input.click();
+    });
+  },
+
   async saveFileToPrivateStorage(fileObj, fileName) {
     const uniqueName = `${Date.now()}_${fileName || 'file'}`;
     await set(uniqueName, fileObj);
@@ -41,6 +179,13 @@ export const fileService = {
   async getFileUrl(fileUri) {
     if (!fileUri) return null;
     try {
+      if (fileUri.startsWith('synth://')) {
+        const dummyUrl = new URL(fileUri.replace('synth://', 'http://local.synth/'));
+        const style = dummyUrl.searchParams.get('style') || 'acoustic';
+        const tempo = parseInt(dummyUrl.searchParams.get('tempo') || '90', 10);
+        const duration = parseInt(dummyUrl.searchParams.get('dur') || '180', 10);
+        return await soundGeneratorService.getSongAudioUrl(fileUri, { style, tempo, duration });
+      }
       if (fileUri.startsWith('idb://')) {
         const key = fileUri.replace('idb://', '');
         const blob = await get(key);
