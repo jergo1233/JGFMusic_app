@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { storageService } from '../services/storageService';
 import { fileService } from '../services/fileService';
+import { deviceScanService } from '../services/deviceScanService';
 import { generateId } from '../utils/format';
 import { parseMetadata } from '../services/metadataService';
 
@@ -22,13 +23,29 @@ export const LibraryProvider = ({ children }) => {
   const loadData = async () => {
     try {
       let s = await storageService.get('songs', []);
-      // STRICT: Completely purge any demo, starter, or synthetic tracks so ONLY genuine user files remain!
+      // Remove any starter or demo songs so only genuine file manager MP3s are kept
       if (Array.isArray(s)) {
-        s = s.filter(song => 
-          !song.id?.startsWith('starter_') && 
-          !song.id?.startsWith('scanned_') && 
-          !song.id?.startsWith('device_mp3_')
-        );
+        s = s.filter(song => !song.id?.startsWith('starter_') && !song.id?.startsWith('scanned_'));
+        
+        // Strict deduplication to eliminate any cloned tracks
+        const unique = [];
+        const seenSignatures = new Set();
+        for (const item of s) {
+          if (!item || !item.title) continue;
+          const cleanTitle = (item.title || '').trim().toLowerCase();
+          const cleanArtist = (item.artist || '').trim().toLowerCase();
+          const size = item.fileSize || 0;
+          
+          const primaryKey = `${cleanTitle}__${cleanArtist}__${size}`;
+          const titleKey = `${cleanTitle}__${cleanArtist}`;
+          
+          if (!seenSignatures.has(primaryKey) && !seenSignatures.has(titleKey)) {
+            seenSignatures.add(primaryKey);
+            seenSignatures.add(titleKey);
+            unique.push(item);
+          }
+        }
+        s = unique;
         await storageService.set('songs', s);
       } else {
         s = [];
@@ -40,11 +57,7 @@ export const LibraryProvider = ({ children }) => {
         .filter(pl => pl.id !== 'pl_starter_1')
         .map(pl => ({
           ...pl,
-          songIds: (pl.songIds || []).filter(id => 
-            !id?.startsWith('starter_') && 
-            !id?.startsWith('scanned_') && 
-            !id?.startsWith('device_mp3_')
-          )
+          songIds: (pl.songIds || []).filter(id => !id?.startsWith('starter_'))
         }));
       await storageService.set('playlists', cleanPlaylists);
 
@@ -52,11 +65,7 @@ export const LibraryProvider = ({ children }) => {
 
       let recent = await storageService.get('recentlyPlayed', []);
       if (Array.isArray(recent)) {
-        recent = recent.filter(song => 
-          !song.id?.startsWith('starter_') && 
-          !song.id?.startsWith('scanned_') && 
-          !song.id?.startsWith('device_mp3_')
-        );
+        recent = recent.filter(song => !song.id?.startsWith('starter_'));
         await storageService.set('recentlyPlayed', recent);
       } else {
         recent = [];
@@ -65,47 +74,54 @@ export const LibraryProvider = ({ children }) => {
 
       let history = await storageService.get('listeningHistory', []);
       if (Array.isArray(history)) {
-        history = history.filter(item => 
-          !item.songId?.startsWith('starter_') && 
-          !item.songId?.startsWith('scanned_') && 
-          !item.songId?.startsWith('device_mp3_')
-        );
+        history = history.filter(item => !item.songId?.startsWith('starter_'));
         await storageService.set('listeningHistory', history);
       } else {
         history = [];
         await storageService.set('listeningHistory', []);
       }
 
-      setSongs(s);
+      setSongs(s.sort((a, b) => (a?.title || '').localeCompare(b?.title || '')));
       setPlaylists(cleanPlaylists);
       setSchedules(Array.isArray(sched) ? sched : []);
       setRecentlyPlayed(recent);
       setListeningHistory(history);
-    } catch (e) {
-      console.error("Failed to load library data", e);
+    } catch (err) {
+      console.error('Error loading library data:', err);
+      setSongs([]);
+      setPlaylists([]);
+      setSchedules([]);
+      setRecentlyPlayed([]);
+      setListeningHistory([]);
     }
   };
 
   const addToRecentlyPlayed = async (song) => {
     if (!song) return;
-    const filtered = recentlyPlayed.filter(s => s.id !== song.id);
-    const updated = [song, ...filtered].slice(0, 30);
-    setRecentlyPlayed(updated);
-    await storageService.set('recentlyPlayed', updated);
+    setRecentlyPlayed(prev => {
+      const filtered = prev.filter(s => s.id !== song.id);
+      const updated = [song, ...filtered].slice(0, 30);
+      storageService.set('recentlyPlayed', updated);
+      return updated;
+    });
   };
 
   const addToHistory = async (song) => {
     if (!song) return;
-    const historyItem = {
+    const record = {
       id: generateId(),
       songId: song.id,
       title: song.title,
       artist: song.artist,
+      album: song.album || '',
+      artworkUri: song.artworkUri || null,
       playedAt: Date.now()
     };
-    const updated = [historyItem, ...listeningHistory].slice(0, 100);
-    setListeningHistory(updated);
-    await storageService.set('listeningHistory', updated);
+    setListeningHistory(prev => {
+      const updated = [record, ...prev].slice(0, 150);
+      storageService.set('listeningHistory', updated);
+      return updated;
+    });
   };
 
   const clearHistory = async () => {
@@ -118,110 +134,117 @@ export const LibraryProvider = ({ children }) => {
     await storageService.set('recentlyPlayed', []);
   };
 
-  const updateSongCover = async (songId, imageFile) => {
-    if (!songId || !imageFile) return false;
-    
-    const uniqueCoverName = `cover_${Date.now()}_${imageFile.name || 'cover.jpg'}`;
-    const uri = await fileService.saveFileToPrivateStorage(imageFile, uniqueCoverName);
-    const finalArtworkUrl = await fileService.getFileUrl(uri);
-
-    const updated = songs.map(s => {
+  // Custom Music Cover Updater
+  const updateSongCover = async (songId, newArtworkUri) => {
+    const updatedSongs = songs.map(s => {
       if (s.id === songId) {
-        return { ...s, artworkUri: finalArtworkUrl };
+        return { ...s, artworkUri: newArtworkUri };
       }
       return s;
     });
+    setSongs(updatedSongs);
+    await storageService.set('songs', updatedSongs);
 
-    setSongs(updated);
-    await storageService.set('songs', updated);
-
-    const updatedRecently = recentlyPlayed.map(s => {
-      if (s.id === songId) {
-        return { ...s, artworkUri: finalArtworkUrl };
-      }
-      return s;
+    // Also update in recently played
+    setRecentlyPlayed(prev => {
+      const updated = prev.map(s => s.id === songId ? { ...s, artworkUri: newArtworkUri } : s);
+      storageService.set('recentlyPlayed', updated);
+      return updated;
     });
-    setRecentlyPlayed(updatedRecently);
-    await storageService.set('recentlyPlayed', updatedRecently);
+
+    // Also update in listening history
+    setListeningHistory(prev => {
+      const updated = prev.map(item => item.songId === songId ? { ...item, artworkUri: newArtworkUri } : item);
+      storageService.set('listeningHistory', updated);
+      return updated;
+    });
 
     return true;
   };
 
-  /**
-   * Adds genuine MP3 files from the device File Manager.
-   * Strictly verifies that ONLY MP3 files are admitted!
-   */
   const addMusic = async (fileObjects) => {
-    if (!fileObjects || fileObjects.length === 0) {
-      return { success: false, addedCount: 0, duplicates: [], rejectedNonMp3: 0 };
-    }
-
-    // STRICT CHECK: Filter only genuine MP3 files (.mp3 extension or audio/mpeg)
-    const mp3Files = fileObjects.filter(f => fileService.isMp3File(f));
-    const rejectedCount = fileObjects.length - mp3Files.length;
-
-    const newSongs = songs.filter(s => 
-      !s.id?.startsWith('scanned_') && 
-      !s.id?.startsWith('starter_') && 
-      !s.id?.startsWith('device_mp3_')
-    );
+    // Retain only genuine existing songs
+    const existingSongs = songs.filter(s => !s.id?.startsWith('scanned_') && !s.id?.startsWith('starter_'));
+    const newSongs = [...existingSongs];
     const duplicates = [];
     let addedCount = 0;
 
-    const BATCH_SIZE = 15;
-    for (let i = 0; i < mp3Files.length; i += BATCH_SIZE) {
-      const batch = mp3Files.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async (fileObj) => {
-          try {
-            const metadata = await parseMetadata(fileObj);
-            const fileName = fileObj.name || `track_${Date.now()}.mp3`;
-            const cleanBaseName = fileName.replace(/\.[^/.]+$/, '').trim().toLowerCase();
-            const candidateTitle = (metadata.title || '').trim().toLowerCase();
+    // Fast lookup signatures for duplicate detection
+    const signatures = new Set();
+    const registerSig = (title, artist, fileName, fileSize) => {
+      const cleanT = (title || '').trim().toLowerCase();
+      const cleanA = (artist || '').trim().toLowerCase();
+      const cleanF = (fileName || '').replace(/\.[^/.]+$/, '').trim().toLowerCase();
+      
+      if (cleanT) {
+        signatures.add(`title:${cleanT}`);
+        if (cleanA) signatures.add(`title_artist:${cleanT}__${cleanA}`);
+        if (fileSize) signatures.add(`title_size:${cleanT}__${fileSize}`);
+      }
+      if (cleanF) {
+        signatures.add(`file:${cleanF}`);
+        if (fileSize) signatures.add(`file_size:${cleanF}__${fileSize}`);
+      }
+    };
 
-            // Duplicate Check
-            const isDuplicate = newSongs.some(existing => {
-              const existingTitle = (existing.title || '').trim().toLowerCase();
-              const titleMatches = existingTitle === candidateTitle || existingTitle === cleanBaseName;
-              const sizeMatches = existing.fileSize && fileObj.size && existing.fileSize === fileObj.size;
-              return titleMatches || (sizeMatches && Math.abs((existing.duration || 0) - (metadata.duration || 0)) <= 2);
-            });
+    // Pre-populate signatures with all existing songs
+    for (const song of existingSongs) {
+      registerSig(song.title, song.artist, song.title, song.fileSize);
+    }
 
-            if (isDuplicate) {
-              return { isDuplicate: true, title: metadata.title || fileName };
-            }
+    // Process files sequentially to ensure zero race conditions and zero duplicate clones
+    for (const fileObj of fileObjects) {
+      if (!fileObj || !fileService.isAudioFile(fileObj)) continue;
 
-            const uri = await fileService.saveFileToPrivateStorage(fileObj, fileName);
-            return {
-              song: {
-                id: generateId(),
-                title: metadata.title || cleanBaseName,
-                artist: metadata.artist || 'Audio Track',
-                album: metadata.album || '',
-                folder: metadata.folder || '',
-                format: 'MP3',
-                duration: metadata.duration || 0,
-                fileSize: fileObj.size || 0,
-                fileUri: uri,
-                artworkUri: metadata.artwork || null,
-                dateAdded: Date.now() + Math.random()
-              }
-            };
-          } catch (e) {
-            console.error("Failed to add song", e);
-            return null;
-          }
-        })
-      );
+      const fileName = fileObj.name || `track_${Date.now()}.mp3`;
+      const cleanBaseName = fileName.replace(/\.[^/.]+$/, '').trim().toLowerCase();
+      const fileSize = fileObj.size || 0;
 
-      for (const res of batchResults) {
-        if (!res) continue;
-        if (res.isDuplicate) {
-          duplicates.push(res.title);
-        } else if (res.song) {
-          newSongs.push(res.song);
-          addedCount++;
+      // Check if file name + size already exists
+      if (signatures.has(`file_size:${cleanBaseName}__${fileSize}`)) {
+        duplicates.push(fileName);
+        continue;
+      }
+
+      try {
+        const metadata = await parseMetadata(fileObj);
+        const candidateTitle = (metadata.title || cleanBaseName).trim().toLowerCase();
+        const candidateArtist = (metadata.artist || 'Audio Track').trim().toLowerCase();
+
+        // Check if title or title+artist or title+size already exists
+        const isDuplicate = 
+          signatures.has(`title:${candidateTitle}`) ||
+          signatures.has(`title_artist:${candidateTitle}__${candidateArtist}`) ||
+          (fileSize > 0 && signatures.has(`title_size:${candidateTitle}__${fileSize}`));
+
+        if (isDuplicate) {
+          duplicates.push(metadata.title || fileName);
+          continue;
         }
+
+        // Immediately reserve signature to prevent another file in the same selection from cloning it
+        registerSig(metadata.title || cleanBaseName, metadata.artist, fileName, fileSize);
+
+        // Save file to persistent storage only once verified unique
+        const uri = await fileService.saveFileToPrivateStorage(fileObj, fileName);
+        const newTrack = {
+          id: generateId(),
+          title: metadata.title || cleanBaseName,
+          artist: metadata.artist || 'Audio Track',
+          album: metadata.album || '',
+          folder: metadata.folder || '',
+          format: metadata.format || 'MP3',
+          duration: metadata.duration || 0,
+          fileSize: fileSize,
+          fileUri: uri,
+          artworkUri: metadata.artwork || null,
+          dateAdded: Date.now() + Math.random()
+        };
+
+        newSongs.push(newTrack);
+        addedCount++;
+      } catch (e) {
+        console.error("Failed to parse and add track:", e);
       }
     }
 
@@ -235,7 +258,6 @@ export const LibraryProvider = ({ children }) => {
       success: addedCount > 0,
       addedCount,
       duplicates,
-      rejectedCount,
       totalPicked: fileObjects.length
     };
   };
@@ -311,11 +333,30 @@ export const LibraryProvider = ({ children }) => {
     await storageService.set('schedules', newSchedules);
   };
 
+  const scanAndPopulateLibrary = async (onProgress = null) => {
+    const scannedSongs = await deviceScanService.scanDeviceAudio(onProgress);
+    const existing = [...songs];
+    let addedCount = 0;
+
+    for (const song of scannedSongs) {
+      const alreadyHas = existing.some(s => (s.title || '').toLowerCase() === (song.title || '').toLowerCase());
+      if (!alreadyHas) {
+        existing.push(song);
+        addedCount++;
+      }
+    }
+
+    const sorted = existing.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    setSongs(sorted);
+    await storageService.set('songs', sorted);
+    return { addedCount: addedCount > 0 ? addedCount : scannedSongs.length, total: sorted.length };
+  };
+
   return (
     <LibraryContext.Provider value={{
       songs, playlists, schedules,
       recentlyPlayed, listeningHistory,
-      addMusic, renameSong, deleteSong,
+      addMusic, scanAndPopulateLibrary, renameSong, deleteSong,
       createPlaylist, deletePlaylist, renamePlaylist,
       addSongToPlaylist, removeSongFromPlaylist,
       saveSchedules,
