@@ -1,5 +1,4 @@
 import { set, get, del } from 'idb-keyval';
-import { soundGeneratorService } from './soundGeneratorService';
 
 export const fileService = {
   async pickImageFile() {
@@ -179,13 +178,6 @@ export const fileService = {
   async getFileUrl(fileUri) {
     if (!fileUri) return null;
     try {
-      if (fileUri.startsWith('synth://')) {
-        const dummyUrl = new URL(fileUri.replace('synth://', 'http://local.synth/'));
-        const style = dummyUrl.searchParams.get('style') || 'acoustic';
-        const tempo = parseInt(dummyUrl.searchParams.get('tempo') || '90', 10);
-        const duration = parseInt(dummyUrl.searchParams.get('dur') || '180', 10);
-        return await soundGeneratorService.getSongAudioUrl(fileUri, { style, tempo, duration });
-      }
       if (fileUri.startsWith('idb://')) {
         const key = fileUri.replace('idb://', '');
         const blob = await get(key);
