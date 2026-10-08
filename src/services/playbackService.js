@@ -4,17 +4,64 @@ class PlaybackService {
     this.currentUrl = null;
     this.audio.volume = 1;
     this.lastNonZeroVolume = 1;
+    this.endedDispatched = false;
 
+    // Normal audio ended event
     this.audio.addEventListener('ended', () => {
-      if (this.onEnded) this.onEnded();
+      if (!this.endedDispatched) {
+        this.endedDispatched = true;
+        if (this.onEnded) this.onEnded();
+      }
+    });
+
+    // Reset dispatched flag whenever a track begins playing
+    this.audio.addEventListener('play', () => {
+      this.endedDispatched = false;
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
+    });
+
+    this.audio.addEventListener('pause', () => {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'paused';
+      }
     });
 
     this.audio.addEventListener('timeupdate', () => {
-      if (this.onTimeUpdate) this.onTimeUpdate(this.audio.currentTime);
+      const cur = this.audio.currentTime || 0;
+      const dur = this.audio.duration || 0;
+      if (this.onTimeUpdate) this.onTimeUpdate(cur);
+
+      // Re-arm ended trigger if seeked back
+      if (dur > 0 && cur < dur - 1.2) {
+        this.endedDispatched = false;
+      }
+
+      // Safeguard for mobile browsers or audio streams where 'ended' event could be dropped:
+      if (
+        !this.endedDispatched &&
+        dur > 0 &&
+        cur >= dur - 0.25 &&
+        !this.audio.paused
+      ) {
+        this.endedDispatched = true;
+        if (this.onEnded) {
+          this.onEnded();
+        }
+      }
     });
 
     this.audio.addEventListener('loadedmetadata', () => {
-      if (this.onLoadedMetadata) this.onLoadedMetadata(this.audio.duration);
+      if (this.onLoadedMetadata) this.onLoadedMetadata(this.audio.duration || 0);
+    });
+
+    // Audio error handling: notify so PlayerContext can auto-skip unplayable/corrupt files
+    this.audio.addEventListener('error', (e) => {
+      console.warn('Playback audio element error:', e);
+      if (this.onError) {
+        this.onError(e);
+      }
     });
 
     this.setupMediaSession();
@@ -45,8 +92,8 @@ class PlaybackService {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: song.title || 'Track',
-          artist: song.artist || 'Artist',
-          album: song.album || 'Album',
+          artist: song.artist || 'Audio Track',
+          album: song.album || song.folder || 'Music Library',
           artwork: song.artworkUri ? [
             { src: song.artworkUri, sizes: '512x512', type: 'image/jpeg' }
           ] : []
@@ -66,16 +113,24 @@ class PlaybackService {
   }
 
   async load(url, song, forceFromBeginning = false) {
+    this.endedDispatched = false;
     if (this.currentUrl !== url) {
+      // Clean up previous blob URL if needed to prevent memory leaks
+      if (this.currentUrl && this.currentUrl.startsWith('blob:') && this.currentUrl !== url) {
+        try {
+          URL.revokeObjectURL(this.currentUrl);
+        } catch (e) {}
+      }
       this.audio.src = url;
-      this.audio.load();
       this.currentUrl = url;
     }
+
     if (forceFromBeginning) {
       try {
         this.audio.currentTime = 0;
       } catch (e) {}
     }
+
     if (song) {
       this.updateMediaSessionMetadata(song);
     }
@@ -84,6 +139,31 @@ class PlaybackService {
   async play() {
     try {
       this.audio.muted = false;
+
+      // Ensure audio element has loaded metadata/data before requesting play
+      if (this.audio.readyState < 2 && this.audio.src) {
+        await new Promise((resolve) => {
+          let finished = false;
+          const done = () => {
+            if (!finished) {
+              finished = true;
+              cleanup();
+              resolve();
+            }
+          };
+          const cleanup = () => {
+            this.audio.removeEventListener('canplay', done);
+            this.audio.removeEventListener('loadeddata', done);
+            this.audio.removeEventListener('error', done);
+            clearTimeout(timer);
+          };
+          const timer = setTimeout(done, 600);
+          this.audio.addEventListener('canplay', done, { once: true });
+          this.audio.addEventListener('loadeddata', done, { once: true });
+          this.audio.addEventListener('error', done, { once: true });
+        });
+      }
+
       const playPromise = this.audio.play();
       if (playPromise !== undefined) {
         await playPromise;
@@ -94,6 +174,19 @@ class PlaybackService {
       return { success: true };
     } catch (e) {
       console.warn("Playback autoplay/play caught:", e);
+      // If play request was interrupted by rapid source switch, retry once
+      if (e.name === 'AbortError') {
+        try {
+          await new Promise(r => setTimeout(r, 120));
+          await this.audio.play();
+          if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'playing';
+          }
+          return { success: true };
+        } catch (retryErr) {
+          return { success: false, error: retryErr };
+        }
+      }
       return { success: false, error: e };
     }
   }
@@ -137,7 +230,7 @@ class PlaybackService {
   }
 
   setRepeat(repeatMode) {
-    // Mode: 'off', 'playlist', 'song'
+    // Mode: 'off', 'all', 'song'
     this.audio.loop = (repeatMode === 'song');
   }
 }

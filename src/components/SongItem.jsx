@@ -7,6 +7,7 @@ import CdDisc from './CdDisc';
 
 const SongItem = ({ 
   song, 
+  trackNumber,
   isPlaying, 
   isCurrent, 
   onClick, 
@@ -155,12 +156,21 @@ const SongItem = ({
       </div>
       
       <div className="ml-3 sm:ml-4 flex-1 overflow-hidden">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {trackNumber !== undefined && (
+            <span className={`text-[10px] sm:text-xs font-mono font-black px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+              isCurrent 
+                ? 'bg-amber-400 text-slate-950 shadow-xs' 
+                : 'bg-indigo-200/90 dark:bg-slate-700 text-indigo-950 dark:text-indigo-200'
+            }`}>
+              #{trackNumber}
+            </span>
+          )}
           <h4 className={`text-lg sm:text-xl font-black uppercase truncate tracking-tight ${isCurrent ? 'text-white dark:text-indigo-950 drop-shadow-[2px_2px_0_#c7d2fe]' : 'drop-shadow-[2px_2px_0_#c7d2fe] dark:drop-shadow-[2px_2px_0_#312e81]'}`}>
             {song.title}
           </h4>
           {isCurrent && isPlaying && (
-            <div className="flex-shrink-0 scale-90">
+            <div className="flex-shrink-0 scale-90 flex items-center gap-1">
               <BeatAnimation isPlaying={true} />
             </div>
           )}

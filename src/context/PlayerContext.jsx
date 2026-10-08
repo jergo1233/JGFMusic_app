@@ -350,67 +350,124 @@ export const PlayerProvider = ({ children }) => {
     };
   }, [schedules, songs, playlists]);
 
+  const isAdvancingRef = useRef(false);
+  const handleNextRef = useRef();
+  const handlePreviousRef = useRef();
+
   // Previous & Next Song (in Playlist & Library) + Auto-play Next Song when finished
-  const handleNext = () => {
-    const currentQ = (stateRef.current.queue && stateRef.current.queue.length > 0) 
-      ? stateRef.current.queue 
-      : stateRef.current.songs;
-    const rMode = stateRef.current.repeatMode;
+  const handleNext = async () => {
+    // Prevent duplicate triggers if both audio 'ended' and timeupdate safeguard fire
+    if (isAdvancingRef.current) return;
+    isAdvancingRef.current = true;
+    setTimeout(() => {
+      isAdvancingRef.current = false;
+    }, 450);
+
+    const state = stateRef.current;
+    const currentQ = (state.queue && state.queue.length > 0) 
+      ? state.queue 
+      : state.songs;
+    const rMode = state.repeatMode;
 
     if (rMode === 'song') {
       playbackService.seek(0);
-      playbackService.play();
-      setIsPlaying(true);
+      const res = await playbackService.play();
+      if (res && res.success) setIsPlaying(true);
       return;
     }
 
     if (currentQ && currentQ.length > 0) {
-      let curIdx = stateRef.current.currentIndex;
-      if ((curIdx < 0 || curIdx >= currentQ.length) && stateRef.current.currentSong) {
-        const matchIdx = currentQ.findIndex(s => s.id === stateRef.current.currentSong.id);
+      let curIdx = state.currentIndex;
+      if ((curIdx < 0 || curIdx >= currentQ.length) && state.currentSong) {
+        const matchIdx = currentQ.findIndex(s => s.id === state.currentSong.id);
         if (matchIdx >= 0) curIdx = matchIdx;
       }
       if (curIdx < 0) curIdx = 0;
+
       let nextIdx = curIdx + 1;
       if (nextIdx >= currentQ.length) {
-        nextIdx = 0; // Seamless loop back to top of queue
+        nextIdx = 0; // Continuous loop back to first track in queue
       }
-      // Play next song in the established queue order without re-shuffling or resetting
-      playSong(currentQ[nextIdx], null);
+
+      const nextSong = currentQ[nextIdx];
+      if (nextSong) {
+        const result = await playSong(nextSong, currentQ, true);
+        // If the track couldn't play (e.g. invalid format or removed file), auto-advance to the one after it
+        if (!result?.success && currentQ.length > 1) {
+          console.warn("Track failed to play, auto-advancing to subsequent track:", nextSong.title);
+          const backupIdx = (nextIdx + 1) % currentQ.length;
+          if (backupIdx !== curIdx) {
+            await playSong(currentQ[backupIdx], currentQ, true);
+          }
+        }
+      }
+    } else {
+      setIsPlaying(false);
     }
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = async () => {
     if (playbackService.audio.currentTime > 3) {
       playbackService.seek(0);
       return;
     }
-    const currentQ = (stateRef.current.queue && stateRef.current.queue.length > 0) 
-      ? stateRef.current.queue 
-      : stateRef.current.songs;
+    const state = stateRef.current;
+    const currentQ = (state.queue && state.queue.length > 0) 
+      ? state.queue 
+      : state.songs;
 
     if (currentQ && currentQ.length > 0) {
-      let curIdx = stateRef.current.currentIndex;
-      if ((curIdx < 0 || curIdx >= currentQ.length) && stateRef.current.currentSong) {
-        const matchIdx = currentQ.findIndex(s => s.id === stateRef.current.currentSong.id);
+      let curIdx = state.currentIndex;
+      if ((curIdx < 0 || curIdx >= currentQ.length) && state.currentSong) {
+        const matchIdx = currentQ.findIndex(s => s.id === state.currentSong.id);
         if (matchIdx >= 0) curIdx = matchIdx;
       }
       if (curIdx < 0) curIdx = 0;
+
       let prevIdx = curIdx - 1;
       if (prevIdx < 0) {
         prevIdx = currentQ.length - 1;
       }
-      playSong(currentQ[prevIdx], null);
+      await playSong(currentQ[prevIdx], currentQ, true);
     }
   };
+
+  // Always keep callback refs up-to-date to prevent stale closures
+  handleNextRef.current = handleNext;
+  handlePreviousRef.current = handlePrevious;
 
   useEffect(() => {
     playbackService.onTimeUpdate = (time) => setCurrentTime(time);
     playbackService.onLoadedMetadata = (dur) => setDuration(dur);
-    playbackService.onEnded = handleNext; // Auto-play next song when current finishes!
-    playbackService.onNext = handleNext;
-    playbackService.onPrevious = handlePrevious;
+    // Reliable auto-play of next song when current track ends
+    playbackService.onEnded = () => {
+      if (handleNextRef.current) handleNextRef.current();
+    };
+    playbackService.onNext = () => {
+      if (handleNextRef.current) handleNextRef.current();
+    };
+    playbackService.onPrevious = () => {
+      if (handlePreviousRef.current) handlePreviousRef.current();
+    };
+    playbackService.onError = () => {
+      // Auto-recover from bad track by skipping forward
+      if (handleNextRef.current) handleNextRef.current();
+    };
   }, []);
+
+  // Pre-load queue with library songs if queue is empty
+  useEffect(() => {
+    if (songs && songs.length > 0 && queue.length === 0) {
+      setQueue(songs);
+      stateRef.current.queue = songs;
+      if (!currentSong) {
+        setCurrentSong(songs[0]);
+        setCurrentIndex(0);
+        stateRef.current.currentSong = songs[0];
+        stateRef.current.currentIndex = 0;
+      }
+    }
+  }, [songs]);
 
   const updateQueue = (newQueue) => {
     if (!newQueue || !Array.isArray(newQueue) || newQueue.length === 0) return;
@@ -426,9 +483,10 @@ export const PlayerProvider = ({ children }) => {
   };
 
   const playSong = async (song, sourceQueue = null, forceFromBeginning = false) => {
-    if (!song) return;
+    if (!song) return { success: false };
 
-    let activeQueue = sourceQueue || (queue.length > 0 ? queue : songs);
+    const state = stateRef.current;
+    let activeQueue = sourceQueue || (state.queue && state.queue.length > 0 ? state.queue : state.songs);
     if (!activeQueue || activeQueue.length === 0) {
       activeQueue = [song];
     }
@@ -462,6 +520,13 @@ export const PlayerProvider = ({ children }) => {
 
     try {
       const url = await fileService.getFileUrl(song.fileUri);
+      if (!url) {
+        console.warn("Unable to get playable file URL for track:", song.title);
+        setIsPlaying(false);
+        stateRef.current.isPlaying = false;
+        return { success: false, error: 'File URL unavailable' };
+      }
+
       await playbackService.load(url, song, forceFromBeginning);
       if (forceFromBeginning) {
         playbackService.seek(0);
@@ -470,14 +535,17 @@ export const PlayerProvider = ({ children }) => {
       const playResult = await playbackService.play();
       if (playResult && playResult.success) {
         setIsPlaying(true);
+        stateRef.current.isPlaying = true;
         return { success: true };
       } else {
         setIsPlaying(false);
+        stateRef.current.isPlaying = false;
         return { success: false, error: playResult?.error };
       }
     } catch (e) {
       console.error("Failed to play", e);
       setIsPlaying(false);
+      stateRef.current.isPlaying = false;
       return { success: false, error: e };
     }
   };
@@ -486,10 +554,16 @@ export const PlayerProvider = ({ children }) => {
     if (isPlaying) {
       playbackService.pause();
       setIsPlaying(false);
+      stateRef.current.isPlaying = false;
     } else {
+      if (!currentSong && songs && songs.length > 0) {
+        await playSong(songs[0], songs, true);
+        return;
+      }
       const res = await playbackService.play();
       if (res && res.success) {
         setIsPlaying(true);
+        stateRef.current.isPlaying = true;
       }
     }
   };
@@ -515,17 +589,23 @@ export const PlayerProvider = ({ children }) => {
   };
 
   const toggleRepeat = () => {
-    const modes = ['off', 'playlist', 'song'];
+    const modes = ['off', 'all', 'song'];
     const nextMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
     setRepeatMode(nextMode);
+    stateRef.current.repeatMode = nextMode;
+    storageService.set('repeatMode', nextMode);
     playbackService.setRepeat(nextMode);
   };
 
   const toggleShuffle = () => {
-    setShuffleMode(!shuffleMode);
-    if (!shuffleMode && queue.length > 0) {
+    const nextShuffle = !shuffleMode;
+    setShuffleMode(nextShuffle);
+    stateRef.current.shuffleMode = nextShuffle;
+    if (nextShuffle && queue.length > 1) {
       const remaining = queue.slice(currentIndex + 1).sort(() => Math.random() - 0.5);
-      setQueue([...queue.slice(0, currentIndex + 1), ...remaining]);
+      const newQ = [...queue.slice(0, currentIndex + 1), ...remaining];
+      setQueue(newQ);
+      stateRef.current.queue = newQ;
     }
   };
 
@@ -595,7 +675,7 @@ export const PlayerProvider = ({ children }) => {
       currentSong, isPlaying, currentTime, duration,
       volume, isMuted, changeVolume, toggleMute,
       repeatMode, shuffleMode, queue, currentIndex,
-      updateQueue,
+      updateQueue, setShuffleMode, setRepeatMode,
       playSong, togglePlay, handleNext, handlePrevious,
       seek, toggleRepeat, toggleShuffle, setCurrentPlaylist, closePlayer,
       playScheduledItem,

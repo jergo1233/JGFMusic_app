@@ -20,7 +20,11 @@ import {
   Layers, 
   Clock, 
   FolderOpen,
-  Plus
+  Plus,
+  Shuffle,
+  SkipForward,
+  Radio,
+  ListMusic
 } from 'lucide-react';
 import SongItem from '../components/SongItem';
 import AddMusicButton from '../components/AddMusicButton';
@@ -29,7 +33,7 @@ import CustomCoverModal from '../components/CustomCoverModal';
 
 const Library = () => {
   const { songs, playlists, renameSong, deleteSong, addSongToPlaylist, updateSongCover, addMusic } = useLibrary();
-  const { playSong, currentSong, isPlaying, togglePlay, updateQueue } = usePlayer();
+  const { playSong, currentSong, isPlaying, togglePlay, updateQueue, handleNext, queue, setShuffleMode } = usePlayer();
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -132,6 +136,23 @@ const Library = () => {
 
   const currentSortObj = sortOptions.find(o => o.id === sortBy) || sortOptions[0];
 
+  // Calculate total playing duration of songs currently in view
+  const totalDurationSec = sortedSongs.reduce((acc, s) => acc + (s.duration || 0), 0);
+  const formatTotalTime = (totalSec) => {
+    if (!totalSec || isNaN(totalSec) || totalSec <= 0) return null;
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
+  };
+
+  // Determine current active queue and upcoming next song
+  const activeQueue = (queue && queue.length > 0) ? queue : sortedSongs;
+  const currentSongIdx = activeQueue.findIndex(s => s.id === currentSong?.id);
+  const nextTrack = currentSongIdx >= 0 && activeQueue.length > 1 
+    ? activeQueue[(currentSongIdx + 1) % activeQueue.length] 
+    : null;
+
   const handleToggleMenu = (songId) => {
     setOpenMenuSongId(prev => (prev === songId ? null : songId));
   };
@@ -139,19 +160,29 @@ const Library = () => {
   const handleSongPlayPause = (song) => {
     setOpenMenuSongId(null);
     if (currentSong?.id === song.id) {
-      if (updateQueue) {
-        updateQueue(sortedSongs);
-      }
       togglePlay();
     } else {
-      playSong(song, sortedSongs);
+      // Play selected track and ensure all songs are loaded into active playback queue
+      playSong(song, sortedSongs, true);
     }
   };
 
   const handlePlayAll = () => {
     if (sortedSongs.length > 0) {
       setOpenMenuSongId(null);
-      playSong(sortedSongs[0], sortedSongs);
+      if (setShuffleMode) setShuffleMode(false);
+      // Play from first song and queue all library tracks
+      playSong(sortedSongs[0], sortedSongs, true);
+    }
+  };
+
+  const handleShuffleAll = () => {
+    if (sortedSongs.length > 0) {
+      setOpenMenuSongId(null);
+      if (setShuffleMode) setShuffleMode(true);
+      // Shuffle all library tracks and begin playback
+      const shuffled = [...sortedSongs].sort(() => Math.random() - 0.5);
+      playSong(shuffled[0], shuffled, true);
     }
   };
 
@@ -357,11 +388,16 @@ const Library = () => {
         </div>
       )}
 
-      {/* Track count indicator & Active Sort Filter Chip */}
-      <div className="flex items-center justify-between mb-4 px-1 flex-wrap gap-2">
+      {/* Track count indicator, Total Duration, & Play / Shuffle Action Bar */}
+      <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black uppercase tracking-widest text-indigo-950 dark:text-white">
             ALL SONGS ({sortedSongs.length})
+            {formatTotalTime(totalDurationSec) && (
+              <span className="ml-1 text-[11px] font-bold text-indigo-600 dark:text-amber-300">
+                • {formatTotalTime(totalDurationSec)}
+              </span>
+            )}
           </span>
           <button
             type="button"
@@ -376,19 +412,75 @@ const Library = () => {
 
         <div className="flex items-center gap-2">
           {sortedSongs.length > 0 && (
-            <button
-              id="library-play-all-btn"
-              type="button"
-              onClick={handlePlayAll}
-              className="flex items-center gap-1.5 text-xs font-black uppercase px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white max-border shadow-sm cursor-pointer active:scale-95 transition-all"
-              title="Start playing all songs in sequence"
-            >
-              <Play size={12} fill="currentColor" />
-              <span>PLAY ALL ({sortedSongs.length})</span>
-            </button>
+            <>
+              {/* Play All Button: Plays from track #1 through all tracks */}
+              <button
+                id="library-play-all-btn"
+                type="button"
+                onClick={handlePlayAll}
+                className="flex items-center gap-1.5 text-xs font-black uppercase px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white max-border shadow-sm cursor-pointer active:scale-95 transition-all"
+                title="Play all songs in order"
+              >
+                <Play size={13} fill="currentColor" />
+                <span>PLAY ALL ({sortedSongs.length})</span>
+              </button>
+
+              {/* Shuffle All Button: Randomizes queue and plays */}
+              <button
+                id="library-shuffle-all-btn"
+                type="button"
+                onClick={handleShuffleAll}
+                className="flex items-center gap-1.5 text-xs font-black uppercase px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 max-border shadow-sm cursor-pointer active:scale-95 transition-all"
+                title="Shuffle and play all songs"
+              >
+                <Shuffle size={13} className="stroke-[3]" />
+                <span className="hidden sm:inline">SHUFFLE</span>
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Active Queue & Auto-Advance Status Banner */}
+      {currentSong && sortedSongs.length > 0 && (
+        <div className="mb-4 p-3 bg-gradient-to-r from-indigo-900 to-purple-900 text-white max-border rounded-2xl shadow-md flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-sm font-black text-xs">
+              <Radio size={16} className={isPlaying ? "animate-pulse" : ""} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase text-amber-300 tracking-wider">
+                  {isPlaying ? 'NOW PLAYING' : 'READY IN QUEUE'}
+                </span>
+                <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-white/20 text-white">
+                  AUTO-NEXT: ACTIVE
+                </span>
+              </div>
+              <p className="text-xs font-black uppercase truncate text-white">
+                {currentSong.title}
+                {nextTrack && (
+                  <span className="text-indigo-200 font-bold ml-1.5 text-[11px]">
+                    ❯ NEXT: {nextTrack.title}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {nextTrack && (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="flex items-center gap-1 text-[11px] font-black uppercase px-2.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white shrink-0 active:scale-95 transition-all cursor-pointer"
+              title="Skip to next track in queue"
+            >
+              <span>NEXT</span>
+              <SkipForward size={13} className="stroke-[3]" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter / Sort Selection Modal */}
       {showFilterModal && (
@@ -482,10 +574,11 @@ const Library = () => {
       {/* Song Showcase List */}
       <div className="space-y-3.5">
         {sortedSongs.length > 0 ? (
-          sortedSongs.map(song => (
+          sortedSongs.map((song, index) => (
             <SongItem 
               key={song.id} 
               song={song} 
+              trackNumber={index + 1}
               isCurrent={currentSong?.id === song.id}
               isPlaying={currentSong?.id === song.id && isPlaying}
               isMenuOpen={openMenuSongId === song.id}
